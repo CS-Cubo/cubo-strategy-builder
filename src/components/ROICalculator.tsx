@@ -201,7 +201,7 @@ const ROICalculator = () => {
                 </div>
                 <TrendingUp className="h-10 w-10 text-success-600" />
               </div>
-            </Card>
+            </CardContent>
           </Card>
         </div>
       )}
