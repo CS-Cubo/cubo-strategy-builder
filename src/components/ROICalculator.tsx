@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,7 @@ interface ROIProject {
   timeframe: number;
   expectedRevenue: number;
   expectedCosts: number;
+  estimatedROI?: number; // For simple model
   riskLevel: "Baixo" | "Médio" | "Alto";
   calculationModel: "Empresarial" | "Simples";
   results?: {
@@ -36,6 +36,7 @@ const ROICalculator = () => {
     timeframe: 12,
     expectedRevenue: 0,
     expectedCosts: 0,
+    estimatedROI: 0,
     riskLevel: "Médio",
     calculationModel: "Empresarial"
   });
@@ -83,17 +84,16 @@ const ROICalculator = () => {
         riskAdjustedROI
       };
     } else {
-      // Modelo Simples: ROI = (Ganho - Investimento) / Investimento * 100
-      const gain = project.expectedRevenue;
-      const roi = ((gain - project.investmentAmount) / project.investmentAmount) * 100;
-      const netProfit = gain - project.investmentAmount;
-      const breakEvenMonths = project.timeframe / 2; // Simplified assumption
-      const monthlyReturn = netProfit / project.timeframe;
+      // Modelo Simples: Usa ROI estimado diretamente
+      const roi = project.estimatedROI || 0;
+      const netProfit = project.investmentAmount * (roi / 100);
+      const breakEvenMonths = roi > 0 ? 12 / (roi / 100) : 0; // Simplified assumption
+      const monthlyReturn = netProfit / 12; // Assuming 12 months
       
       return {
         roi,
         netProfit,
-        breakEvenMonths,
+        breakEvenMonths: Math.max(0, breakEvenMonths),
         monthlyReturn,
         riskAdjustedROI: roi // No risk adjustment in simple model
       };
@@ -120,6 +120,7 @@ const ROICalculator = () => {
       timeframe: 12,
       expectedRevenue: 0,
       expectedCosts: 0,
+      estimatedROI: 0,
       riskLevel: "Médio",
       calculationModel: "Empresarial"
     });
@@ -397,7 +398,7 @@ const ROICalculator = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Empresarial">Empresarial (Receitas - Custos - Investimento)</SelectItem>
-                    <SelectItem value="Simples">Simples (Ganho - Investimento)</SelectItem>
+                    <SelectItem value="Simples">Simples (Contrato + ROI Estimado)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -423,7 +424,9 @@ const ROICalculator = () => {
               </div>
 
               <div>
-                <Label htmlFor="investment">Investimento Inicial (R$)</Label>
+                <Label htmlFor="investment">
+                  {currentProject.calculationModel === "Simples" ? "Valor do Contrato (R$)" : "Investimento Inicial (R$)"}
+                </Label>
                 <Input
                   id="investment"
                   type="number"
@@ -433,38 +436,51 @@ const ROICalculator = () => {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="timeframe">Prazo (meses)</Label>
-                <Input
-                  id="timeframe"
-                  type="number"
-                  value={currentProject.timeframe}
-                  onChange={(e) => setCurrentProject({ ...currentProject, timeframe: Number(e.target.value) })}
-                  min="1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="revenue">
-                  {currentProject.calculationModel === "Empresarial" ? "Receita Esperada (R$)" : "Ganho Esperado (R$)"}
-                </Label>
-                <Input
-                  id="revenue"
-                  type="number"
-                  value={currentProject.expectedRevenue || ""}
-                  onChange={(e) => setCurrentProject({ ...currentProject, expectedRevenue: Number(e.target.value) })}
-                  placeholder="0"
-                />
-              </div>
-
               {currentProject.calculationModel === "Empresarial" && (
+                <>
+                  <div>
+                    <Label htmlFor="timeframe">Prazo (meses)</Label>
+                    <Input
+                      id="timeframe"
+                      type="number"
+                      value={currentProject.timeframe}
+                      onChange={(e) => setCurrentProject({ ...currentProject, timeframe: Number(e.target.value) })}
+                      min="1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="revenue">Receita Esperada (R$)</Label>
+                    <Input
+                      id="revenue"
+                      type="number"
+                      value={currentProject.expectedRevenue || ""}
+                      onChange={(e) => setCurrentProject({ ...currentProject, expectedRevenue: Number(e.target.value) })}
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="costs">Custos Operacionais (R$)</Label>
+                    <Input
+                      id="costs"
+                      type="number"
+                      value={currentProject.expectedCosts || ""}
+                      onChange={(e) => setCurrentProject({ ...currentProject, expectedCosts: Number(e.target.value) })}
+                      placeholder="0"
+                    />
+                  </div>
+                </>
+              )}
+
+              {currentProject.calculationModel === "Simples" && (
                 <div>
-                  <Label htmlFor="costs">Custos Operacionais (R$)</Label>
+                  <Label htmlFor="estimatedROI">ROI Estimado (%)</Label>
                   <Input
-                    id="costs"
+                    id="estimatedROI"
                     type="number"
-                    value={currentProject.expectedCosts || ""}
-                    onChange={(e) => setCurrentProject({ ...currentProject, expectedCosts: Number(e.target.value) })}
+                    value={currentProject.estimatedROI || ""}
+                    onChange={(e) => setCurrentProject({ ...currentProject, estimatedROI: Number(e.target.value) })}
                     placeholder="0"
                   />
                 </div>
@@ -546,7 +562,9 @@ const ROICalculator = () => {
                               </span>
                             </div>
                             <div>
-                              <span className="text-gray-500">Investimento:</span>
+                              <span className="text-gray-500">
+                                {project.calculationModel === "Simples" ? "Contrato:" : "Investimento:"}
+                              </span>
                               <span className="ml-1 font-medium">
                                 R$ {project.investmentAmount.toLocaleString('pt-BR')}
                               </span>
