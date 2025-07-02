@@ -18,6 +18,7 @@ interface Project {
   category: "Core" | "Adjacente" | "Transformacional";
   selected: boolean;
   description?: string;
+  expectedReturn?: string;
 }
 
 const StrategyPlatform = () => {
@@ -31,7 +32,8 @@ const StrategyPlatform = () => {
     name: "",
     impact: 5,
     complexity: 5,
-    category: "Core" as const
+    category: "Core" as "Core" | "Adjacente" | "Transformacional",
+    expectedReturn: ""
   });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -52,11 +54,12 @@ const StrategyPlatform = () => {
       impact: currentProject.impact,
       complexity: currentProject.complexity,
       category: currentProject.category,
-      selected: true
+      selected: true,
+      expectedReturn: currentProject.expectedReturn
     };
 
     setProjects([...projects, newProject]);
-    setCurrentProject({ name: "", impact: 5, complexity: 5, category: "Core" });
+    setCurrentProject({ name: "", impact: 5, complexity: 5, category: "Core", expectedReturn: "" });
     
     toast({
       title: "Projeto adicionado",
@@ -67,6 +70,12 @@ const StrategyPlatform = () => {
   const toggleProjectSelection = (id: number) => {
     setProjects(projects.map(p => 
       p.id === id ? { ...p, selected: !p.selected } : p
+    ));
+  };
+
+  const updateProjectReturn = (id: number, expectedReturn: string) => {
+    setProjects(projects.map(p => 
+      p.id === id ? { ...p, expectedReturn } : p
     ));
   };
 
@@ -94,7 +103,8 @@ const StrategyPlatform = () => {
           complexity: 7,
           category: "Transformacional",
           selected: true,
-          description: "Implementação de analytics preditivos para otimização de processos"
+          description: "Implementação de analytics preditivos para otimização de processos",
+          expectedReturn: ""
         },
         {
           id: Date.now() + 2,
@@ -103,7 +113,8 @@ const StrategyPlatform = () => {
           complexity: 5,
           category: "Core",
           selected: true,
-          description: "Automatização de workflows operacionais principais"
+          description: "Automatização de workflows operacionais principais",
+          expectedReturn: ""
         },
         {
           id: Date.now() + 3,
@@ -112,7 +123,8 @@ const StrategyPlatform = () => {
           complexity: 8,
           category: "Adjacente",
           selected: true,
-          description: "Centro de desenvolvimento de soluções digitais inovadoras"
+          description: "Centro de desenvolvimento de soluções digitais inovadoras",
+          expectedReturn: ""
         }
       ];
 
@@ -145,59 +157,194 @@ const StrategyPlatform = () => {
       return;
     }
 
+    // Create enhanced chart SVG for report
+    const categoryColors = {
+      Core: '#3b82f6',
+      Adjacente: '#8b5cf6', 
+      Transformacional: '#ec4899'
+    };
+
+    const chartDots = selectedProjects.map(project => {
+      const cx = ((project.complexity - 1) / 9) * 90 + 5;
+      const cy = 95 - (((project.impact - 1) / 9) * 90);
+      
+      return `
+        <g class="chart-group">
+          <circle cx="${cx}%" cy="${cy}%" r="8" fill="${categoryColors[project.category]}" opacity="0.8" stroke="#fff" stroke-width="2"/>
+          <title>${project.name}</title>
+        </g>
+      `;
+    }).join('');
+
+    const gridLines = [];
+    for (let i = 1; i <= 9; i++) {
+      gridLines.push(`<line x1="${i * 10}%" y1="0" x2="${i * 10}%" y2="100" stroke="#e5e7eb" stroke-width="1"/>`);
+      gridLines.push(`<line x1="0" y1="${i * 10}%" x2="100" y2="${i * 10}%" stroke="#e5e7eb" stroke-width="1"/>`);
+    }
+
+    const chartSvg = `
+      <svg width="100%" height="400px" viewBox="0 0 100 100" preserveAspectRatio="none" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 2px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+        ${gridLines.join('')}
+        <text x="-45" y="8" style="font-size: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #64748b; font-weight: 600;" transform="rotate(-90)">IMPACTO</text>
+        <text x="45" y="108" style="font-size: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #64748b; font-weight: 600;">COMPLEXIDADE</text>
+        ${chartDots}
+      </svg>
+    `;
+
     const reportContent = `
       <!DOCTYPE html>
       <html>
         <head>
           <title>Relatório Estratégico - ${portfolioName}</title>
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 2rem; color: #1f2937; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #22c55e; padding-bottom: 1rem; margin-bottom: 2rem; }
-            .logo { font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, #0ea5e9 0%, #22c55e 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-            .projects-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-            .projects-table th, .projects-table td { border: 1px solid #e5e7eb; padding: 0.75rem; text-align: left; }
-            .projects-table th { background-color: #f9fafb; font-weight: 600; }
-            .category-core { background-color: #dbeafe; color: #1e40af; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; }
-            .category-adjacente { background-color: #e9d5ff; color: #581c87; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; }
-            .category-transformacional { background-color: #fce7f3; color: #831843; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; }
-            @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+              margin: 2rem; 
+              color: #1f2937; 
+              line-height: 1.6;
+              background: #fafafa;
+            }
+            .container {
+              max-width: 1200px;
+              margin: 0 auto;
+              background: white;
+              padding: 3rem;
+              border-radius: 16px;
+              box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            }
+            .header { 
+              display: flex; 
+              justify-content: space-between; 
+              align-items: center; 
+              border-bottom: 4px solid #22c55e; 
+              padding-bottom: 2rem; 
+              margin-bottom: 3rem; 
+            }
+            .logo { 
+              font-size: 2.5rem; 
+              font-weight: 700; 
+              background: linear-gradient(135deg, #0ea5e9 0%, #22c55e 100%); 
+              -webkit-background-clip: text; 
+              -webkit-text-fill-color: transparent; 
+            }
+            .chart-section {
+              margin: 3rem 0;
+              padding: 2rem;
+              background: #f8fafc;
+              border-radius: 12px;
+              border: 1px solid #e2e8f0;
+            }
+            .projects-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-top: 2rem; 
+              background: white;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            }
+            .projects-table th, .projects-table td { 
+              border: 1px solid #e5e7eb; 
+              padding: 1rem; 
+              text-align: left; 
+            }
+            .projects-table th { 
+              background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); 
+              font-weight: 700; 
+              color: #374151;
+              text-transform: uppercase;
+              font-size: 0.875rem;
+              letter-spacing: 0.05em;
+            }
+            .category-core { background-color: #dbeafe; color: #1e40af; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-adjacente { background-color: #e9d5ff; color: #581c87; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-transformacional { background-color: #fce7f3; color: #831843; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .legend {
+              display: flex;
+              gap: 2rem;
+              justify-content: center;
+              margin-top: 1rem;
+              flex-wrap: wrap;
+            }
+            .legend-item {
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              font-size: 0.875rem;
+              font-weight: 500;
+            }
+            .legend-dot {
+              width: 16px;
+              height: 16px;
+              border-radius: 50%;
+              border: 2px solid #fff;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            @media print { 
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .container { box-shadow: none; margin: 0; }
+            }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="logo">Cubo Estratégia</div>
-            <div>
-              <h1 style="margin: 0; color: #374151;">${portfolioName}</h1>
-              <p style="margin: 0; color: #6b7280;">Relatório gerado em: ${new Date().toLocaleDateString('pt-BR')}</p>
+          <div class="container">
+            <div class="header">
+              <div class="logo">Cubo Estratégia</div>
+              <div>
+                <h1 style="margin: 0; color: #374151; font-size: 2rem;">${portfolioName}</h1>
+                <p style="margin: 0; color: #6b7280; font-size: 1.125rem;">Relatório gerado em: ${new Date().toLocaleDateString('pt-BR')}</p>
+              </div>
             </div>
-          </div>
-          
-          <h3 style="color: #374151; margin-bottom: 1rem;">Projetos Selecionados</h3>
-          <table class="projects-table">
-            <thead>
-              <tr>
-                <th>Projeto</th>
-                <th>Categoria</th>
-                <th>Impacto</th>
-                <th>Complexidade</th>
-                <th>Descrição</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${selectedProjects.map(p => `
+            
+            <div class="chart-section">
+              <h2 style="color: #374151; margin-bottom: 1.5rem; font-size: 1.5rem;">Matriz Estratégica: Impacto vs Complexidade</h2>
+              ${chartSvg}
+              <div class="legend">
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #3b82f6;"></div>
+                  <span>Core</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #8b5cf6;"></div>
+                  <span>Adjacente</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #ec4899;"></div>
+                  <span>Transformacional</span>
+                </div>
+              </div>
+            </div>
+            
+            <h2 style="color: #374151; margin-bottom: 1.5rem; font-size: 1.5rem;">Projetos Estratégicos Selecionados</h2>
+            <table class="projects-table">
+              <thead>
                 <tr>
-                  <td>${p.name}</td>
-                  <td><span class="category-${p.category.toLowerCase()}">${p.category}</span></td>
-                  <td>${p.impact}</td>
-                  <td>${p.complexity}</td>
-                  <td>${p.description || 'N/A'}</td>
+                  <th>Projeto</th>
+                  <th>Categoria</th>
+                  <th>Impacto</th>
+                  <th>Complexidade</th>
+                  <th>Retorno Esperado</th>
+                  <th>Descrição</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          
-          <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 0.875rem;">
-            Relatório confidencial gerado pela Plataforma Cubo Estratégia
+              </thead>
+              <tbody>
+                ${selectedProjects.map(p => `
+                  <tr>
+                    <td style="font-weight: 600; color: #1f2937;">${p.name}</td>
+                    <td><span class="category-${p.category.toLowerCase()}">${p.category}</span></td>
+                    <td style="text-align: center; font-weight: 600; color: #059669;">${p.impact}</td>
+                    <td style="text-align: center; font-weight: 600; color: #dc2626;">${p.complexity}</td>
+                    <td style="font-weight: 600; color: #0ea5e9;">${p.expectedReturn || 'N/A'}</td>
+                    <td style="color: #6b7280;">${p.description || 'N/A'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            
+            <div style="margin-top: 3rem; padding-top: 2rem; border-top: 2px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 0.875rem;">
+              <strong>Relatório confidencial gerado pela Plataforma Cubo Estratégia</strong><br>
+              Este documento contém informações estratégicas sensíveis e deve ser tratado com confidencialidade.
+            </div>
           </div>
         </body>
       </html>
@@ -323,6 +470,16 @@ const StrategyPlatform = () => {
               </div>
               
               <div>
+                <Label htmlFor="expectedReturn">Retorno Esperado</Label>
+                <Input
+                  id="expectedReturn"
+                  value={currentProject.expectedReturn}
+                  onChange={(e) => setCurrentProject({ ...currentProject, expectedReturn: e.target.value })}
+                  placeholder="Ex: R$ 2.5M, 15% ROI, 200% crescimento"
+                />
+              </div>
+              
+              <div>
                 <Label>Impacto: {currentProject.impact}</Label>
                 <Input
                   type="range"
@@ -378,18 +535,28 @@ const StrategyPlatform = () => {
                 <CardTitle>Projetos Atuais</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="space-y-3 max-h-80 overflow-y-auto">
                   {projects.map((project) => (
-                    <div key={project.id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={project.selected}
-                        onChange={() => toggleProjectSelection(project.id)}
-                        className="rounded border-gray-300 text-corporate-500 focus:ring-corporate-500"
-                      />
-                      <label className="text-sm text-gray-700 flex-1">
-                        {project.name}
-                      </label>
+                    <div key={project.id} className="border rounded-lg p-3 bg-gray-50">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <input
+                          type="checkbox"
+                          checked={project.selected}
+                          onChange={() => toggleProjectSelection(project.id)}
+                          className="rounded border-gray-300 text-corporate-500 focus:ring-corporate-500"
+                        />
+                        <label className="text-sm font-medium text-gray-700 flex-1">
+                          {project.name}
+                        </label>
+                      </div>
+                      <div className="pl-6">
+                        <Input
+                          placeholder="Retorno esperado..."
+                          value={project.expectedReturn || ""}
+                          onChange={(e) => updateProjectReturn(project.id, e.target.value)}
+                          className="text-xs h-8"
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -399,16 +566,42 @@ const StrategyPlatform = () => {
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex justify-end space-x-4">
-        <Button variant="outline" onClick={() => setProjects([])}>
-          Limpar Projetos
-        </Button>
-        <Button onClick={generateReport} className="bg-gradient-success">
-          <FileText className="mr-2 h-4 w-4" />
-          Gerar Relatório Final
-        </Button>
-      </div>
+      {/* Enhanced Actions Section */}
+      <Card className="border-0 shadow-xl bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-l-green-500">
+        <CardContent className="p-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div className="flex-1">
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                📈 Pronto para Gerar seu Relatório Estratégico?
+              </h3>
+              <p className="text-gray-600 text-lg">
+                Compile todos os projetos selecionados em um relatório profissional completo 
+                com gráficos interativos, análise de retorno esperado e matriz estratégica.
+              </p>
+              <div className="flex items-center mt-3 text-sm text-green-700">
+                <FileText className="h-4 w-4 mr-2" />
+                <span className="font-medium">
+                  {projects.filter(p => p.selected).length} projetos selecionados para o relatório
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button variant="outline" onClick={() => setProjects([])} size="lg">
+                Limpar Projetos
+              </Button>
+              <Button 
+                onClick={generateReport} 
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-lg px-8 py-3 h-auto"
+                size="lg"
+                disabled={projects.filter(p => p.selected).length === 0}
+              >
+                <FileText className="mr-3 h-6 w-6" />
+                Gerar Relatório Estratégico Completo
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
