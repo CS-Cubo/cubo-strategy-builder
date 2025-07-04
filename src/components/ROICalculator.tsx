@@ -660,6 +660,34 @@ const ROICalculator = () => {
                           <TrendingUp className="h-4 w-4" />
                           <span>Benchmarks</span>
                         </Button>
+                         <h3>Buscar Benchmarks de ROI (Beta)</h3>
+                        
+                        <textarea
+                          value={benchmarkDescription}
+                          onChange={e => setBenchmarkDescription(e.target.value)}
+                          placeholder="Descreva seu projeto para buscar benchmarks..."
+                          rows={3}
+                          style={{ width: "100%", marginBottom: 8 }}
+                        />
+                        <button
+                          onClick={async () => {
+                            setBenchmarkResult(null);
+                            setBenchmarkError(null);
+                            setBenchmarkLoading(true);
+                            try {
+                              // const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+                              // Uncomment below after the API key step!
+                              // const result = await fetchBenchmarks(benchmarkDescription, apiKey);
+                              // setBenchmarkResult(result);
+                            } catch (err: any) {
+                              setBenchmarkError(err.message);
+                            } finally {
+                              setBenchmarkLoading(false);
+                            }
+                          }}
+                          disabled={benchmarkLoading || !benchmarkDescription}
+                          style={{ background: "#f28500", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px" }}
+                       
                       </div>
                     </div>
                     <div>
