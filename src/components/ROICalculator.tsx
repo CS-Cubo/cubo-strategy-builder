@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,150 +6,199 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, Trash2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Calculator, Trash2, HelpCircle, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/useSession";
 import { useROIStorage } from "@/hooks/useROIStorage";
 import AccessCodeInput from "./AccessCodeInput";
 
+interface SimpleProject {
+  id?: string;
+  projectName: string;
+  contractValue: number;
+  projectDescription: string;
+  expectedROI: number;
+  calculatedReturn?: number;
+}
+
+interface StrategicProject {
+  id?: string;
+  projectName: string;
+  projectDescription: string;
+  expectedInvestment: number;
+  expectedReturn: number;
+  cashFlowPeriod: number;
+  scenario: "Conservador" | "Realista" | "Otimista";
+  npv?: number;
+  irr?: number;
+  paybackPeriod?: number;
+}
+
 const ROICalculator = () => {
   const { sessionId, accessCode, isLoading: sessionLoading, createOrLoadSession, clearSession, hasSession } = useSession();
   const { projects, saveProject, deleteProject, isLoading: storageLoading } = useROIStorage(sessionId);
   
-  const [formData, setFormData] = useState({
+  const [activeTab, setActiveTab] = useState("simple");
+  const [simpleProjects, setSimpleProjects] = useState<SimpleProject[]>([]);
+  const [strategicProjects, setStrategicProjects] = useState<StrategicProject[]>([]);
+  
+  const [simpleForm, setSimpleForm] = useState<SimpleProject>({
     projectName: "",
+    contractValue: 0,
     projectDescription: "",
-    investmentAmount: 10000,
-    timeframe: 12,
-    expectedRevenue: 0,
-    operationalCosts: 0,
-    estimatedROI: 0,
-    riskLevel: "Médio",
-    calculationModel: "Conservador"
+    expectedROI: 0
   });
 
-  const [result, setResult] = useState<{
-    roi: number;
-    netProfit: number;
-    breakEvenMonths: number;
-    monthlyReturn: number;
-    riskAdjustedROI: number;
-  } | null>(null);
+  const [strategicForm, setStrategicForm] = useState<StrategicProject>({
+    projectName: "",
+    projectDescription: "",
+    expectedInvestment: 0,
+    expectedReturn: 0,
+    cashFlowPeriod: 12,
+    scenario: "Realista"
+  });
 
   const { toast } = useToast();
 
-  const calculateROI = () => {
-    const { investmentAmount, expectedRevenue, operationalCosts } = formData;
-
-    const netProfit = expectedRevenue - operationalCosts;
-    const roi = ((netProfit - investmentAmount) / investmentAmount) * 100;
-
-    // Break-even point calculation (simplified)
-    const monthlyRevenue = expectedRevenue / formData.timeframe;
-    const monthlyCosts = operationalCosts / formData.timeframe;
-    const breakEvenMonths = investmentAmount / (monthlyRevenue - monthlyCosts);
-
-    // Monthly return
-    const monthlyReturn = netProfit / formData.timeframe;
-
-    // Risk-adjusted ROI (example: subtract risk percentage from ROI)
-    let riskFactor = 0;
-    switch (formData.riskLevel) {
-      case "Alto":
-        riskFactor = 0.2;
-        break;
-      case "Médio":
-        riskFactor = 0.1;
-        break;
-      case "Baixo":
-        riskFactor = 0.05;
-        break;
-      default:
-        riskFactor = 0.1;
-    }
-    const riskAdjustedROI = roi * (1 - riskFactor);
-
-    setResult({
-      roi: roi,
-      netProfit: netProfit,
-      breakEvenMonths: breakEvenMonths,
-      monthlyReturn: monthlyReturn,
-      riskAdjustedROI: riskAdjustedROI
-    });
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { id, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [id]: value
-    }));
-  };
-
-  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const { id, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [id]: value
-    }));
-  };
-
-  // Auto-save functionality
-  useEffect(() => {
-    if (hasSession && result && formData.projectName) {
-      const projectData = {
-        project_name: formData.projectName,
-        project_description: formData.projectDescription,
-        investment_amount: formData.investmentAmount,
-        timeframe: formData.timeframe,
-        expected_revenue: formData.expectedRevenue,
-        expected_costs: formData.operationalCosts,
-        estimated_roi: formData.estimatedROI,
-        risk_level: formData.riskLevel,
-        calculation_model: formData.calculationModel,
-        roi_result: result.roi,
-        net_profit: result.netProfit,
-        break_even_months: result.breakEvenMonths,
-        monthly_return: result.monthlyReturn,
-        risk_adjusted_roi: result.riskAdjustedROI
-      };
-
-      // Debounce the save operation
-      const timeoutId = setTimeout(() => {
-        saveProject(projectData);
-      }, 2000);
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [result, formData, hasSession, saveProject]);
-
-  const loadProject = (project: any) => {
-    setFormData({
-      projectName: project.project_name,
-      projectDescription: project.project_description || "",
-      investmentAmount: project.investment_amount,
-      timeframe: project.timeframe || 12,
-      expectedRevenue: project.expected_revenue || 0,
-      operationalCosts: project.expected_costs || 0,
-      estimatedROI: project.estimated_roi || 0,
-      riskLevel: project.risk_level,
-      calculationModel: project.calculation_model
-    });
-
-    if (project.roi_result) {
-      setResult({
-        roi: project.roi_result,
-        netProfit: project.net_profit || 0,
-        breakEvenMonths: project.break_even_months || 0,
-        monthlyReturn: project.monthly_return || 0,
-        riskAdjustedROI: project.risk_adjusted_roi || 0
+  const calculateSimpleROI = () => {
+    if (!simpleForm.projectName) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Nome do projeto é obrigatório.",
+        variant: "destructive"
       });
+      return;
     }
+
+    const calculatedReturn = (simpleForm.contractValue * simpleForm.expectedROI) / 100;
+    const newProject = {
+      ...simpleForm,
+      calculatedReturn,
+      id: Date.now().toString()
+    };
+    
+    setSimpleProjects(prev => [...prev, newProject]);
+    
+    // Save to database
+    if (hasSession) {
+      const projectData = {
+        project_name: newProject.projectName,
+        project_description: newProject.projectDescription,
+        investment_amount: newProject.contractValue,
+        expected_revenue: calculatedReturn,
+        estimated_roi: newProject.expectedROI,
+        calculation_model: "Simples",
+        risk_level: "Baixo",
+        roi_result: newProject.expectedROI
+      };
+      saveProject(projectData);
+    }
+
+    // Reset form
+    setSimpleForm({
+      projectName: "",
+      contractValue: 0,
+      projectDescription: "",
+      expectedROI: 0
+    });
 
     toast({
-      title: "Projeto carregado!",
-      description: `Projeto "${project.project_name}" foi carregado com sucesso.`,
+      title: "Projeto adicionado!",
+      description: "Projeto calculado e adicionado à lista.",
     });
+  };
+
+  const calculateStrategicROI = () => {
+    if (!strategicForm.projectName) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Nome do projeto é obrigatório.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Apply scenario adjustments
+    let adjustedReturn = strategicForm.expectedReturn;
+    switch (strategicForm.scenario) {
+      case "Conservador":
+        adjustedReturn = strategicForm.expectedReturn * 0.85;
+        break;
+      case "Otimista":
+        adjustedReturn = strategicForm.expectedReturn * 1.15;
+        break;
+      default: // Realista
+        adjustedReturn = strategicForm.expectedReturn;
+    }
+
+    // Simple NPV calculation (assuming monthly cash flows)
+    const monthlyReturn = adjustedReturn / strategicForm.cashFlowPeriod;
+    const discountRate = 0.01; // 1% monthly discount rate
+    
+    let npv = -strategicForm.expectedInvestment;
+    for (let i = 1; i <= strategicForm.cashFlowPeriod; i++) {
+      npv += monthlyReturn / Math.pow(1 + discountRate, i);
+    }
+
+    // Simple IRR approximation
+    const totalReturn = adjustedReturn - strategicForm.expectedInvestment;
+    const irr = (Math.pow(adjustedReturn / strategicForm.expectedInvestment, 1 / (strategicForm.cashFlowPeriod / 12)) - 1) * 100;
+
+    // Payback period calculation
+    const paybackPeriod = strategicForm.expectedInvestment / monthlyReturn;
+
+    const newProject = {
+      ...strategicForm,
+      npv,
+      irr,
+      paybackPeriod,
+      id: Date.now().toString()
+    };
+    
+    setStrategicProjects(prev => [...prev, newProject]);
+
+    // Save to database
+    if (hasSession) {
+      const projectData = {
+        project_name: newProject.projectName,
+        project_description: newProject.projectDescription,
+        investment_amount: newProject.expectedInvestment,
+        expected_revenue: adjustedReturn,
+        estimated_roi: newProject.irr || 0,
+        calculation_model: "Estratégico",
+        risk_level: newProject.scenario === "Conservador" ? "Baixo" : newProject.scenario === "Realista" ? "Médio" : "Alto",
+        roi_result: newProject.irr,
+        net_profit: npv,
+        break_even_months: paybackPeriod,
+        timeframe: newProject.cashFlowPeriod
+      };
+      saveProject(projectData);
+    }
+
+    // Reset form
+    setStrategicForm({
+      projectName: "",
+      projectDescription: "",
+      expectedInvestment: 0,
+      expectedReturn: 0,
+      cashFlowPeriod: 12,
+      scenario: "Realista"
+    });
+
+    toast({
+      title: "Projeto adicionado!",
+      description: "Análise estratégica calculada e adicionada à lista.",
+    });
+  };
+
+  const removeSimpleProject = (id: string) => {
+    setSimpleProjects(prev => prev.filter(p => p.id !== id));
+  };
+
+  const removeStrategicProject = (id: string) => {
+    setStrategicProjects(prev => prev.filter(p => p.id !== id));
   };
 
   if (!hasSession) {
@@ -175,206 +225,268 @@ const ROICalculator = () => {
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Header */}
-      <div className="bg-gradient-success rounded-2xl p-8 text-white">
-        <div className="flex items-center space-x-4 mb-4">
-          <Calculator className="h-10 w-10" />
-          <div>
-            <h1 className="text-3xl font-bold">Calculadora de ROI</h1>
-            <p className="text-xl opacity-90">
-              Calcule o retorno sobre investimento dos seus projetos.
-            </p>
+    <TooltipProvider>
+      <div className="space-y-8 animate-fade-in">
+        {/* Header */}
+        <div className="bg-gradient-success rounded-2xl p-8 text-white">
+          <div className="flex items-center space-x-4 mb-4">
+            <Calculator className="h-10 w-10" />
+            <div>
+              <h1 className="text-3xl font-bold">Calculadora de ROI</h1>
+              <p className="text-xl opacity-90">
+                Calcule o retorno sobre investimento dos seus projetos.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Access Code Status */}
+        <AccessCodeInput
+          onSubmit={createOrLoadSession}
+          isLoading={sessionLoading}
+          currentCode={accessCode}
+          onClear={clearSession}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Calculator Forms */}
+          <div className="lg:col-span-2">
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle>Calculadora de ROI</CardTitle>
+                <CardDescription>
+                  Escolha entre análise simples ou estratégica para seus projetos.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="simple">Simples</TabsTrigger>
+                    <TabsTrigger value="strategic">Estratégico</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="simple" className="space-y-4">
+                    <div>
+                      <Label htmlFor="simple-name">Nome do Projeto</Label>
+                      <Input
+                        id="simple-name"
+                        value={simpleForm.projectName}
+                        onChange={(e) => setSimpleForm({...simpleForm, projectName: e.target.value})}
+                        placeholder="Nome do projeto"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="simple-value">Valor do Contrato (R$)</Label>
+                      <Input
+                        id="simple-value"
+                        type="number"
+                        value={simpleForm.contractValue}
+                        onChange={(e) => setSimpleForm({...simpleForm, contractValue: Number(e.target.value)})}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="simple-description">Descrição do Projeto</Label>
+                      <Textarea
+                        id="simple-description"
+                        value={simpleForm.projectDescription}
+                        onChange={(e) => setSimpleForm({...simpleForm, projectDescription: e.target.value})}
+                        placeholder="Descreva o projeto..."
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="simple-roi">Expected ROI (%)</Label>
+                      <Input
+                        id="simple-roi"
+                        type="number"
+                        value={simpleForm.expectedROI}
+                        onChange={(e) => setSimpleForm({...simpleForm, expectedROI: Number(e.target.value)})}
+                      />
+                    </div>
+                    <Button onClick={calculateSimpleROI} className="w-full">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Adicionar Projeto
+                    </Button>
+                  </TabsContent>
+                  
+                  <TabsContent value="strategic" className="space-y-4">
+                    <div>
+                      <Label htmlFor="strategic-name">Nome do Projeto</Label>
+                      <Input
+                        id="strategic-name"
+                        value={strategicForm.projectName}
+                        onChange={(e) => setStrategicForm({...strategicForm, projectName: e.target.value})}
+                        placeholder="Nome do projeto"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="strategic-description">Descrição do Projeto</Label>
+                      <Textarea
+                        id="strategic-description"
+                        value={strategicForm.projectDescription}
+                        onChange={(e) => setStrategicForm({...strategicForm, projectDescription: e.target.value})}
+                        placeholder="Descreva o projeto..."
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="strategic-investment">Investimento Esperado (R$)</Label>
+                      <Input
+                        id="strategic-investment"
+                        type="number"
+                        value={strategicForm.expectedInvestment}
+                        onChange={(e) => setStrategicForm({...strategicForm, expectedInvestment: Number(e.target.value)})}
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <Label htmlFor="strategic-return">Retorno Esperado (R$)</Label>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <HelpCircle className="h-4 w-4" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>O retorno esperado deve ser o valor total que você espera receber do projeto durante todo o período, incluindo receitas e ganhos.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Input
+                        id="strategic-return"
+                        type="number"
+                        value={strategicForm.expectedReturn}
+                        onChange={(e) => setStrategicForm({...strategicForm, expectedReturn: Number(e.target.value)})}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="strategic-period">Fluxos de Caixa (Período em meses)</Label>
+                      <Input
+                        id="strategic-period"
+                        type="number"
+                        value={strategicForm.cashFlowPeriod}
+                        onChange={(e) => setStrategicForm({...strategicForm, cashFlowPeriod: Number(e.target.value)})}
+                      />
+                    </div>
+                    <div>
+                      <Label>Cenário</Label>
+                      <Select value={strategicForm.scenario} onValueChange={(value: "Conservador" | "Realista" | "Otimista") => setStrategicForm({...strategicForm, scenario: value})}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Conservador">Conservador (-15%)</SelectItem>
+                          <SelectItem value="Realista">Realista (0%)</SelectItem>
+                          <SelectItem value="Otimista">Otimista (+15%)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={calculateStrategicROI} className="w-full">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Adicionar Projeto
+                    </Button>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Projects Panel */}
+          <div className="space-y-6">
+            {/* Simple Projects */}
+            {simpleProjects.length > 0 && (
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-lg">Projetos Simples</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {simpleProjects.map((project) => (
+                    <div key={project.id} className="border rounded-lg p-3 bg-gray-50">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-medium text-sm truncate">{project.projectName}</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeSimpleProject(project.id!)}
+                          className="text-red-600 hover:text-red-800 h-6 w-6 p-0"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="text-xs text-gray-600 space-y-1">
+                        <p>Contrato: R$ {project.contractValue.toLocaleString()}</p>
+                        <p>ROI: {project.expectedROI}%</p>
+                        <p className="font-medium text-green-600">
+                          Retorno: R$ {project.calculatedReturn?.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Strategic Projects */}
+            {strategicProjects.length > 0 && (
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-lg">Projetos Estratégicos</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {strategicProjects.map((project) => (
+                    <div key={project.id} className="border rounded-lg p-3 bg-gray-50">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-medium text-sm truncate">{project.projectName}</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeStrategicProject(project.id!)}
+                          className="text-red-600 hover:text-red-800 h-6 w-6 p-0"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="text-xs text-gray-600 space-y-1">
+                        <p>Investimento: R$ {project.expectedInvestment.toLocaleString()}</p>
+                        <p>Cenário: {project.scenario}</p>
+                        <div className="flex items-center space-x-1">
+                          <span>NPV: R$ {project.npv?.toFixed(0)}</span>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <HelpCircle className="h-3 w-3" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Valor Presente Líquido: diferença entre entradas e saídas de caixa descontadas.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <span>TIR: {project.irr?.toFixed(1)}%</span>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <HelpCircle className="h-3 w-3" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Taxa Interna de Retorno: taxa que torna o NPV igual a zero.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <p>Payback: {project.paybackPeriod?.toFixed(1)} meses</p>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Report Button */}
+            {(simpleProjects.length > 0 || strategicProjects.length > 0) && (
+              <Button className="w-full" variant="outline">
+                Gerar Relatório
+              </Button>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Access Code Status */}
-      <AccessCodeInput
-        onSubmit={createOrLoadSession}
-        isLoading={sessionLoading}
-        currentCode={accessCode}
-        onClear={clearSession}
-      />
-
-      {/* Saved Projects */}
-      {projects.length > 0 && (
-        <Card className="border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle>Projetos Salvos</CardTitle>
-            <CardDescription>
-              Clique em um projeto para carregá-lo ou excluí-lo
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {projects.map((project) => (
-                <div key={project.id} className="border rounded-lg p-4 bg-gray-50">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-medium text-gray-900 truncate">
-                      {project.project_name}
-                    </h3>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => project.id && deleteProject(project.id)}
-                      className="text-red-600 hover:text-red-800 h-8 w-8 p-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    {project.project_description || "Sem descrição"}
-                  </p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-green-600">
-                      ROI: {project.roi_result ? `${project.roi_result.toFixed(1)}%` : 'N/A'}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => loadProject(project)}
-                    >
-                      Carregar
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ROI Calculator Form */}
-      <Card className="border-0 shadow-lg">
-        <CardHeader>
-          <CardTitle>Configuração do Projeto</CardTitle>
-          <CardDescription>
-            Insira os dados do seu projeto para calcular o ROI.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="projectName">Nome do Projeto</Label>
-            <Input
-              type="text"
-              id="projectName"
-              value={formData.projectName}
-              onChange={handleInputChange}
-            />
-          </div>
-          <div>
-            <Label htmlFor="projectDescription">Descrição do Projeto</Label>
-            <Textarea
-              id="projectDescription"
-              value={formData.projectDescription}
-              onChange={handleInputChange}
-              placeholder="Detalhes sobre o projeto..."
-              rows={3}
-            />
-          </div>
-          <div>
-            <Label htmlFor="investmentAmount">Investimento Inicial (R$)</Label>
-            <Input
-              type="number"
-              id="investmentAmount"
-              value={formData.investmentAmount}
-              onChange={handleInputChange}
-            />
-          </div>
-          <div>
-            <Label htmlFor="timeframe">Período (meses)</Label>
-            <Input
-              type="number"
-              id="timeframe"
-              value={formData.timeframe}
-              onChange={handleInputChange}
-            />
-          </div>
-          <div>
-            <Label htmlFor="expectedRevenue">Receita Esperada (R$)</Label>
-            <Input
-              type="number"
-              id="expectedRevenue"
-              value={formData.expectedRevenue}
-              onChange={handleInputChange}
-            />
-          </div>
-          <div>
-            <Label htmlFor="operationalCosts">Custos Operacionais (R$)</Label>
-            <Input
-              type="number"
-              id="operationalCosts"
-              value={formData.operationalCosts}
-              onChange={handleInputChange}
-            />
-          </div>
-          <div>
-            <Label htmlFor="riskLevel">Nível de Risco</Label>
-            <Select id="riskLevel" value={formData.riskLevel} onValueChange={(value) => setFormData({ ...formData, riskLevel: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o nível de risco" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Baixo">Baixo</SelectItem>
-                <SelectItem value="Médio">Médio</SelectItem>
-                <SelectItem value="Alto">Alto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="calculationModel">Modelo de Cálculo</Label>
-            <Select id="calculationModel" value={formData.calculationModel} onValueChange={(value) => setFormData({ ...formData, calculationModel: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o modelo de cálculo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Conservador">Conservador</SelectItem>
-                <SelectItem value="Realista">Realista</SelectItem>
-                <SelectItem value="Otimista">Otimista</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={calculateROI} className="w-full">
-            Calcular ROI
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Results */}
-      {result && (
-        <Card className="border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle>Resultados</CardTitle>
-            <CardDescription>
-              Análise detalhada do retorno sobre investimento do projeto.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <Label>ROI (Retorno sobre Investimento)</Label>
-              <Input value={`${result.roi.toFixed(2)}%`} readOnly />
-            </div>
-            <div>
-              <Label>Lucro Líquido</Label>
-              <Input value={`R$ ${result.netProfit.toFixed(2)}`} readOnly />
-            </div>
-            <div>
-              <Label>Ponto de Equilíbrio (Break-even)</Label>
-              <Input value={`${result.breakEvenMonths.toFixed(1)} meses`} readOnly />
-            </div>
-            <div>
-              <Label>Retorno Mensal</Label>
-              <Input value={`R$ ${result.monthlyReturn.toFixed(2)}`} readOnly />
-            </div>
-            <div>
-              <Label>ROI Ajustado ao Risco</Label>
-              <Input value={`${result.riskAdjustedROI.toFixed(2)}%`} readOnly />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    </TooltipProvider>
   );
 };
 

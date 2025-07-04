@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-interface StrategyProject {
+export type StrategyProject = {
   id?: string;
   name: string;
   impact: number;
@@ -12,161 +12,195 @@ interface StrategyProject {
   selected: boolean;
   description?: string;
   expected_return?: string;
-}
+};
 
-interface StrategySession {
+export type StrategySession = {
   id?: string;
   portfolio_name: string;
   context_history?: string;
   context_initiatives?: string;
-  projects: StrategyProject[];
-}
+};
 
 export const useStrategyStorage = (sessionId: string | null) => {
-  const [strategySession, setStrategySession] = useState<StrategySession | null>(null);
+  const [strategySessions, setStrategySessions] = useState<StrategySession[]>([]);
+  const [projects, setProjects] = useState<StrategyProject[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (sessionId) {
-      loadStrategySession();
+      loadStrategySessions();
     }
   }, [sessionId]);
 
-  const loadStrategySession = async () => {
+  const loadStrategySessions = async () => {
     if (!sessionId) return;
 
     setIsLoading(true);
     try {
-      // Load strategy session
-      const { data: sessionData, error: sessionError } = await supabase
+      // Load strategy sessions
+      const { data: sessions, error: sessionsError } = await supabase
         .from('strategy_sessions')
         .select('*')
         .eq('session_id', sessionId)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
-      if (sessionError) {
-        console.error('Error loading strategy session:', sessionError);
+      if (sessionsError) {
+        console.error('Error loading strategy sessions:', sessionsError);
+        toast({
+          title: "Erro ao carregar sessões",
+          description: "Não foi possível carregar suas sessões estratégicas.",
+          variant: "destructive"
+        });
         return;
       }
 
-      if (sessionData) {
-        // Load projects for this strategy session
+      setStrategySessions(sessions || []);
+
+      // Load projects for all sessions
+      if (sessions && sessions.length > 0) {
+        const sessionIds = sessions.map(s => s.id).filter(Boolean);
         const { data: projectsData, error: projectsError } = await supabase
           .from('strategy_projects')
           .select('*')
-          .eq('strategy_session_id', sessionData.id)
-          .order('created_at', { ascending: true });
+          .in('strategy_session_id', sessionIds)
+          .order('created_at', { ascending: false });
 
         if (projectsError) {
           console.error('Error loading strategy projects:', projectsError);
-          return;
+        } else {
+          // Map the data to match our StrategyProject type
+          const mappedProjects: StrategyProject[] = (projectsData || []).map(project => ({
+            id: project.id,
+            name: project.name,
+            impact: project.impact,
+            complexity: project.complexity,
+            category: project.category as "Core" | "Adjacente" | "Transformacional",
+            selected: project.selected,
+            description: project.description || undefined,
+            expected_return: project.expected_return || undefined
+          }));
+          setProjects(mappedProjects);
         }
-
-        setStrategySession({
-          id: sessionData.id,
-          portfolio_name: sessionData.portfolio_name,
-          context_history: sessionData.context_history,
-          context_initiatives: sessionData.context_initiatives,
-          projects: projectsData || []
-        });
       }
     } catch (error) {
-      console.error('Error loading strategy session:', error);
+      console.error('Error loading strategy data:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const saveStrategySession = async (session: StrategySession) => {
-    if (!sessionId) return;
+    if (!sessionId) return null;
 
     try {
-      let strategySessionId = session.id;
+      const sessionData = {
+        session_id: sessionId,
+        ...session
+      };
 
-      // Create or update strategy session
-      if (strategySessionId) {
-        const { error: updateError } = await supabase
-          .from('strategy_sessions')
-          .update({
-            portfolio_name: session.portfolio_name,
-            context_history: session.context_history,
-            context_initiatives: session.context_initiatives,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', strategySessionId);
+      const { data, error } = await supabase
+        .from('strategy_sessions')
+        .insert(sessionData)
+        .select()
+        .single();
 
-        if (updateError) {
-          console.error('Error updating strategy session:', updateError);
-          return;
-        }
-      } else {
-        const { data: newSession, error: createError } = await supabase
-          .from('strategy_sessions')
-          .insert({
-            session_id: sessionId,
-            portfolio_name: session.portfolio_name,
-            context_history: session.context_history,
-            context_initiatives: session.context_initiatives
-          })
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Error creating strategy session:', createError);
-          return;
-        }
-
-        strategySessionId = newSession.id;
+      if (error) {
+        console.error('Error saving strategy session:', error);
+        toast({
+          title: "Erro ao salvar",
+          description: "Não foi possível salvar a sessão estratégica.",
+          variant: "destructive"
+        });
+        return null;
       }
 
-      // Delete existing projects and insert new ones
-      await supabase
-        .from('strategy_projects')
-        .delete()
-        .eq('strategy_session_id', strategySessionId);
-
-      if (session.projects.length > 0) {
-        const projectsToInsert = session.projects.map(project => ({
-          strategy_session_id: strategySessionId,
-          name: project.name,
-          impact: project.impact,
-          complexity: project.complexity,
-          category: project.category,
-          selected: project.selected,
-          description: project.description,
-          expected_return: project.expected_return
-        }));
-
-        const { error: projectsError } = await supabase
-          .from('strategy_projects')
-          .insert(projectsToInsert);
-
-        if (projectsError) {
-          console.error('Error saving strategy projects:', projectsError);
-          return;
-        }
-      }
-
-      await loadStrategySession(); // Refresh the data
+      await loadStrategySessions(); // Refresh the list
       toast({
-        title: "Portfólio salvo!",
-        description: "Seu portfólio estratégico foi salvo com sucesso.",
+        title: "Sessão salva!",
+        description: "Sua sessão estratégica foi salva com sucesso.",
       });
+
+      return data;
     } catch (error) {
       console.error('Error saving strategy session:', error);
+      return null;
+    }
+  };
+
+  const saveProject = async (project: StrategyProject, strategySessionId: string) => {
+    if (!sessionId) return null;
+
+    try {
+      const projectData = {
+        strategy_session_id: strategySessionId,
+        name: project.name,
+        impact: project.impact,
+        complexity: project.complexity,
+        category: project.category,
+        selected: project.selected,
+        description: project.description,
+        expected_return: project.expected_return
+      };
+
+      const { data, error } = await supabase
+        .from('strategy_projects')
+        .insert(projectData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error saving strategy project:', error);
+        toast({
+          title: "Erro ao salvar",
+          description: "Não foi possível salvar o projeto estratégico.",
+          variant: "destructive"
+        });
+        return null;
+      }
+
+      await loadStrategySessions(); // Refresh the list
+      return data;
+    } catch (error) {
+      console.error('Error saving strategy project:', error);
+      return null;
+    }
+  };
+
+  const deleteStrategySession = async (sessionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('strategy_sessions')
+        .delete()
+        .eq('id', sessionId);
+
+      if (error) {
+        console.error('Error deleting strategy session:', error);
+        toast({
+          title: "Erro ao excluir",
+          description: "Não foi possível excluir a sessão estratégica.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      await loadStrategySessions(); // Refresh the list
       toast({
-        title: "Erro ao salvar",
-        description: "Não foi possível salvar o portfólio estratégico.",
-        variant: "destructive"
+        title: "Sessão excluída!",
+        description: "A sessão estratégica foi removida com sucesso.",
       });
+    } catch (error) {
+      console.error('Error deleting strategy session:', error);
     }
   };
 
   return {
-    strategySession,
+    strategySessions,
+    projects,
     isLoading,
     saveStrategySession,
-    loadStrategySession
+    saveProject,
+    deleteStrategySession,
+    loadStrategySessions
   };
 };
