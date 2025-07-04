@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -64,7 +65,7 @@ const StrategyPlatform = () => {
     }
   }, [strategySession]);
 
-  // Auto-save functionality
+  // Auto-save functionality - debounced
   useEffect(() => {
     if (hasSession && (portfolioName !== "Novo Portfólio de Inovação" || context.history || context.initiatives || projects.length > 0)) {
       const timeoutId = setTimeout(() => {
@@ -74,6 +75,7 @@ const StrategyPlatform = () => {
           context_history: context.history,
           context_initiatives: context.initiatives,
           projects: projects.map(p => ({
+            id: p.id.toString(),
             name: p.name,
             impact: p.impact,
             complexity: p.complexity,
