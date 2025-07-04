@@ -675,10 +675,9 @@ const ROICalculator = () => {
                             setBenchmarkError(null);
                             setBenchmarkLoading(true);
                             try {
-                              // const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
-                              // Uncomment below after the API key step!
-                              // const result = await fetchBenchmarks(benchmarkDescription, apiKey);
-                              // setBenchmarkResult(result);
+                              const apiKey = "AIzaSyAVrfFGDy4S-Puue_3bbtwjFRj39Tmi88E"; // <-- REMOVE before pushing to a public repo!
+                              const result = await fetchBenchmarks(benchmarkDescription, apiKey);
+                              setBenchmarkResult(result);
                             } catch (err: any) {
                               setBenchmarkError(err.message);
                             } finally {
@@ -968,30 +967,30 @@ const ROICalculator = () => {
 
 // --- Gemini Benchmark API fetch function ---
 // Uncomment after you add the UI code!
-// async function fetchBenchmarks(description: string, apiKey: string): Promise<string> {
-//   const prompt = `Com base na seguinte descrição de projeto, forneça um resumo de benchmarks de ROI para iniciativas semelhantes. A resposta deve ser em português e bem estruturada. Inclua: 1. Faixa de ROI comum (ex: 15-25%). 2. Fatores que influenciam esse ROI. 3. 2-3 exemplos públicos ou estudos de caso, cada um com link [Nome da Fonte](URL). Descrição do projeto: "${description}"`;
-//   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-//   const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-//
-//   try {
-//     const response = await fetch(apiUrl, {
-//       method: 'POST',
-//       headers: { 'Content-Type': 'application/json' },
-//       body: JSON.stringify(payload),
-//     });
-//     if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-//     const result = await response.json();
-//     const text =
-//       result.candidates &&
-//       result.candidates[0] &&
-//       result.candidates[0].content &&
-//       result.candidates[0].content.parts &&
-//       result.candidates[0].content.parts[0].text;
-//     return text || "Nenhum benchmark encontrado.";
-//   } catch (err: any) {
-//     return `Erro ao buscar benchmark: ${err.message}`;
-//   }
-// }
+ async function fetchBenchmarks(description: string, apiKey: string): Promise<string> {
+   const prompt = `Com base na seguinte descrição de projeto, forneça um resumo de benchmarks de ROI para iniciativas semelhantes. A resposta deve ser em português e bem estruturada. Inclua: 1. Faixa de ROI comum (ex: 15-25%). 2. Fatores que influenciam esse ROI. 3. 2-3 exemplos públicos ou estudos de caso, cada um com link [Nome da Fonte](URL). Descrição do projeto: "${description}"`;
+   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+   const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+
+   try {
+     const response = await fetch(apiUrl, {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify(payload),
+     });
+     if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+     const result = await response.json();
+     const text =
+       result.candidates &&
+       result.candidates[0] &&
+       result.candidates[0].content &&
+       result.candidates[0].content.parts &&
+       result.candidates[0].content.parts[0].text;
+     return text || "Nenhum benchmark encontrado.";
+   } catch (err: any) {
+     return `Erro ao buscar benchmark: ${err.message}`;
+   }
+ }
 
 
 export default ROICalculator;
