@@ -98,6 +98,10 @@ const mockBenchmarkData: BenchmarkData[] = [
 ];
 
 const ROICalculator = () => {
+  const [benchmarkDescription, setBenchmarkDescription] = useState('');
+  const [benchmarkResult, setBenchmarkResult] = useState<string | null>(null);
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
   const { sessionId, accessCode, isLoading: sessionLoading, createOrLoadSession, clearSession, hasSession } = useSession();
   const { projects: dbProjects, saveProject, deleteProject, isLoading: storageLoading } = useROIStorage(sessionId);
   
