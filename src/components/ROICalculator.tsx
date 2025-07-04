@@ -650,17 +650,6 @@ const ROICalculator = () => {
                         placeholder="Descreva o projeto..."
                         rows={3}
                       />
-                      <div className="flex justify-end mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => searchBenchmarks(simpleForm.projectDescription)}
-                          className="flex items-center space-x-2"
-                        >
-                          <TrendingUp className="h-4 w-4" />
-                          <span>Benchmarks</span>
-                        </Button>                    
-                      </div>
 
                       
                       <section style={{ background: "#222", padding: 16, borderRadius: 8, marginBottom: 24, marginTop: 16 }}>
