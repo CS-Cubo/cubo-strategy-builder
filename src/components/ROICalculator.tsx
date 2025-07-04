@@ -659,9 +659,12 @@ const ROICalculator = () => {
                         >
                           <TrendingUp className="h-4 w-4" />
                           <span>Benchmarks</span>
-                        </Button>
-                         <h3>Buscar Benchmarks de ROI (Beta)</h3>
-                        
+                        </Button>                    
+                      </div>
+
+                      
+                      <section style={{ background: "#222", padding: 16, borderRadius: 8, marginBottom: 24, marginTop: 16 }}>
+                        <h3>Buscar Benchmarks de ROI (Beta)</h3>
                         <textarea
                           value={benchmarkDescription}
                           onChange={e => setBenchmarkDescription(e.target.value)}
@@ -675,7 +678,7 @@ const ROICalculator = () => {
                             setBenchmarkError(null);
                             setBenchmarkLoading(true);
                             try {
-                              const apiKey = "AIzaSyAVrfFGDy4S-Puue_3bbtwjFRj39Tmi88E"; // <-- REMOVE before pushing to a public repo!
+                              const apiKey = "AIzaSyAVrfFGDy4S-Puue_3bbtwjFRj39Tmi88E"; // REMOVE before pushing to public!
                               const result = await fetchBenchmarks(benchmarkDescription, apiKey);
                               setBenchmarkResult(result);
                             } catch (err: any) {
@@ -686,8 +689,22 @@ const ROICalculator = () => {
                           }}
                           disabled={benchmarkLoading || !benchmarkDescription}
                           style={{ background: "#f28500", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px" }}
-                       
-                      </div>
+                        >
+                          {benchmarkLoading ? "Buscando..." : "Buscar Benchmarks"}
+                        </button>
+                        {benchmarkResult && (
+                          <div style={{ marginTop: 16, whiteSpace: 'pre-wrap', color: "#ccc" }}>
+                            {benchmarkResult}
+                          </div>
+                        )}
+                        {benchmarkError && (
+                          <div style={{ marginTop: 16, color: "red" }}>
+                            {benchmarkError}
+                          </div>
+                        )}
+                      </section>
+
+                      
                     </div>
                     <div>
                       <Label htmlFor="simple-roi">Expected ROI (%)</Label>
