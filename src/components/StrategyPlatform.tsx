@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,7 +43,6 @@ const StrategyPlatform = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Load data when strategy session is available
   useEffect(() => {
     if (strategySession) {
       setPortfolioName(strategySession.portfolio_name);
@@ -65,7 +63,6 @@ const StrategyPlatform = () => {
     }
   }, [strategySession]);
 
-  // Auto-save functionality - debounced
   useEffect(() => {
     if (hasSession && (portfolioName !== "Novo Portfólio de Inovação" || context.history || context.initiatives || projects.length > 0)) {
       const timeoutId = setTimeout(() => {
@@ -145,7 +142,6 @@ const StrategyPlatform = () => {
 
     setIsLoading(true);
     
-    // Simulação de chamada para IA (substituir por integração real)
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
@@ -211,7 +207,19 @@ const StrategyPlatform = () => {
       return;
     }
 
-    // Create enhanced chart SVG for report
+    const avgImpact = selectedProjects.reduce((sum, p) => sum + p.impact, 0) / selectedProjects.length;
+    const avgComplexity = selectedProjects.reduce((sum, p) => sum + p.complexity, 0) / selectedProjects.length;
+    
+    const categoryDistribution = {
+      Core: selectedProjects.filter(p => p.category === "Core").length,
+      Adjacente: selectedProjects.filter(p => p.category === "Adjacente").length,
+      Transformacional: selectedProjects.filter(p => p.category === "Transformacional").length
+    };
+
+    const highImpactProjects = selectedProjects.filter(p => p.impact >= 8).length;
+    const lowComplexityProjects = selectedProjects.filter(p => p.complexity <= 4).length;
+    const projectsWithReturn = selectedProjects.filter(p => p.expectedReturn && p.expectedReturn.trim()).length;
+
     const categoryColors = {
       Core: '#3b82f6',
       Adjacente: '#8b5cf6', 
@@ -281,6 +289,37 @@ const StrategyPlatform = () => {
               -webkit-background-clip: text; 
               -webkit-text-fill-color: transparent; 
             }
+            .overview {
+              background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+              padding: 2rem;
+              border-radius: 12px;
+              margin-bottom: 2rem;
+              border-left: 4px solid #0ea5e9;
+            }
+            .overview-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 1.5rem;
+              margin-top: 1rem;
+            }
+            .overview-card {
+              background: white;
+              padding: 1.5rem;
+              border-radius: 8px;
+              text-align: center;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .overview-value {
+              font-size: 2rem;
+              font-weight: bold;
+              color: #0ea5e9;
+              display: block;
+            }
+            .overview-label {
+              color: #6b7280;
+              font-size: 0.875rem;
+              margin-top: 0.5rem;
+            }
             .chart-section {
               margin: 3rem 0;
               padding: 2rem;
@@ -347,6 +386,54 @@ const StrategyPlatform = () => {
               <div>
                 <h1 style="margin: 0; color: #374151; font-size: 2rem;">${portfolioName}</h1>
                 <p style="margin: 0; color: #6b7280; font-size: 1.125rem;">Relatório gerado em: ${new Date().toLocaleDateString('pt-BR')}</p>
+              </div>
+            </div>
+            
+            <div class="overview">
+              <h2 style="margin: 0 0 1rem 0; color: #0ea5e9;">📊 Visão Geral do Portfólio Estratégico</h2>
+              <div class="overview-grid">
+                <div class="overview-card">
+                  <span class="overview-value">${selectedProjects.length}</span>
+                  <div class="overview-label">Projetos Selecionados</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${avgImpact.toFixed(1)}</span>
+                  <div class="overview-label">Impacto Médio</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${avgComplexity.toFixed(1)}</span>
+                  <div class="overview-label">Complexidade Média</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${highImpactProjects}</span>
+                  <div class="overview-label">Alto Impacto (≥8)</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${lowComplexityProjects}</span>
+                  <div class="overview-label">Baixa Complexidade (≤4)</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${projectsWithReturn}</span>
+                  <div class="overview-label">Com Retorno Definido</div>
+                </div>
+              </div>
+              
+              <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                <h3 style="margin: 0 0 1rem 0; color: #374151;">Distribuição por Categoria:</h3>
+                <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
+                  <div style="text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">${categoryDistribution.Core}</div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">Core</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #8b5cf6;">${categoryDistribution.Adjacente}</div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">Adjacente</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #ec4899;">${categoryDistribution.Transformacional}</div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">Transformacional</div>
+                  </div>
+                </div>
               </div>
             </div>
             
