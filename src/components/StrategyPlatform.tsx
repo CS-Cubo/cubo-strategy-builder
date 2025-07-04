@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BarChart3, Sparkles, Plus, Settings, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PortfolioChart from "./PortfolioChart";
+import { useSession } from "@/hooks/useSession";
+import { useStrategyStorage } from "@/hooks/useStrategyStorage";
+import AccessCodeInput from "./AccessCodeInput";
 
 interface Project {
   id: number;
@@ -22,6 +24,9 @@ interface Project {
 }
 
 const StrategyPlatform = () => {
+  const { sessionId, accessCode, isLoading: sessionLoading, createOrLoadSession, clearSession, hasSession } = useSession();
+  const { strategySession, saveStrategySession, isLoading: storageLoading } = useStrategyStorage(sessionId);
+  
   const [portfolioName, setPortfolioName] = useState("Novo Portfólio de Inovação");
   const [context, setContext] = useState({
     history: "",
@@ -37,6 +42,53 @@ const StrategyPlatform = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  // Load data when strategy session is available
+  useEffect(() => {
+    if (strategySession) {
+      setPortfolioName(strategySession.portfolio_name);
+      setContext({
+        history: strategySession.context_history || "",
+        initiatives: strategySession.context_initiatives || ""
+      });
+      setProjects(strategySession.projects.map(p => ({
+        id: p.id ? parseInt(p.id) : Date.now(),
+        name: p.name,
+        impact: p.impact,
+        complexity: p.complexity,
+        category: p.category,
+        selected: p.selected,
+        description: p.description,
+        expectedReturn: p.expected_return
+      })));
+    }
+  }, [strategySession]);
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (hasSession && (portfolioName !== "Novo Portfólio de Inovação" || context.history || context.initiatives || projects.length > 0)) {
+      const timeoutId = setTimeout(() => {
+        const sessionData = {
+          id: strategySession?.id,
+          portfolio_name: portfolioName,
+          context_history: context.history,
+          context_initiatives: context.initiatives,
+          projects: projects.map(p => ({
+            name: p.name,
+            impact: p.impact,
+            complexity: p.complexity,
+            category: p.category,
+            selected: p.selected,
+            description: p.description,
+            expected_return: p.expectedReturn
+          }))
+        };
+        saveStrategySession(sessionData);
+      }, 2000);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [portfolioName, context, projects, hasSession, saveStrategySession, strategySession?.id]);
 
   const addProject = () => {
     if (!currentProject.name) {
@@ -359,6 +411,29 @@ const StrategyPlatform = () => {
     }
   };
 
+  if (!hasSession) {
+    return (
+      <div className="space-y-8 animate-fade-in">
+        <div className="bg-gradient-success rounded-2xl p-8 text-white">
+          <div className="flex items-center space-x-4 mb-4">
+            <BarChart3 className="h-10 w-10" />
+            <div>
+              <h1 className="text-3xl font-bold">Plataforma de Estratégia com IA</h1>
+              <p className="text-xl opacity-90">
+                Construa portfólios estratégicos com sugestões inteligentes.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <AccessCodeInput
+          onSubmit={createOrLoadSession}
+          isLoading={sessionLoading}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
@@ -373,6 +448,14 @@ const StrategyPlatform = () => {
           </div>
         </div>
       </div>
+
+      {/* Access Code Status */}
+      <AccessCodeInput
+        onSubmit={createOrLoadSession}
+        isLoading={sessionLoading}
+        currentCode={accessCode}
+        onClear={clearSession}
+      />
 
       {/* Configuration */}
       <Card className="border-0 shadow-lg">
