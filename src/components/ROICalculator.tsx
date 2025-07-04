@@ -68,7 +68,6 @@ const ROICalculator = () => {
   const [activeTab, setActiveTab] = useState("simple");
   const [simpleProjects, setSimpleProjects] = useState<SimpleProject[]>([]);
   const [strategicProjects, setStrategicProjects] = useState<StrategicProject[]>([]);
-  const [benchmarkLoading, setBenchmarkLoading] = useState(false);
   
   const [simpleForm, setSimpleForm] = useState<SimpleProject>({
     projectName: "",
