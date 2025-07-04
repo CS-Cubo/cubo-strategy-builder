@@ -585,7 +585,7 @@ const ROICalculator = () => {
                             setBenchmarkError(null);
                             setBenchmarkLoading(true);
                             try {
-                              const apiKey = "AIzaSyAVrfFGDy4S-Puue_3bbtwjFRj39Tmi88E"; // REMOVE before pushing to public!
+                              const apiKey = "HHHHHHHHHHHHHHHHHHHH"; // REMOVE before pushing to public!
                               const result = await fetchBenchmarks(benchmarkDescription, apiKey);
                               setBenchmarkResult(result);
                             } catch (err: any) {
