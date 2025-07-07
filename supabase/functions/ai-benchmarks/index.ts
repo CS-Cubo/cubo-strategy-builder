@@ -27,17 +27,26 @@ const handler = async (req: Request): Promise<Response> => {
 
     let prompt = '';
     if (type === 'benchmark') {
-      prompt = `Com base na seguinte descrição de projeto, forneça um resumo estruturado de benchmarks de ROI para iniciativas semelhantes. A resposta deve ser em português e bem formatada. Inclua:
+      prompt = `Com base na seguinte descrição de projeto, forneça um resumo estruturado de benchmarks de ROI para iniciativas semelhantes. A resposta deve ser em português e bem formatada. 
 
+IMPORTANTE: Inclua fontes específicas e confiáveis com links reais sempre que possível. Procure por:
+- Notícias recentes de empresas que implementaram projetos similares
+- Relatórios de consultorias (McKinsey, BCG, Deloitte, etc.)
+- Estudos de caso publicados em revistas de negócios
+- Dados de associações setoriais
+- Relatórios governamentais ou de órgãos reguladores
+
+Para cada informação relevante, inclua:
 1. Faixa de ROI comum (ex: 15-25%)
 2. Fatores que influenciam esse ROI
-3. Exemplos de casos de sucesso similares
+3. Exemplos de casos de sucesso similares COM FONTES ESPECÍFICAS
 4. Timeframe típico de retorno
 5. Riscos e considerações
+6. **FONTES E LINKS**: Para cada benchmark mencionado, cite a fonte específica com link quando disponível
 
 Descrição do projeto: "${description}"
 
-Formato a resposta de forma clara e organizada.`;
+Formate a resposta de forma clara e organizada, destacando as fontes em negrito e incluindo links clicáveis quando possível.`;
     } else {
       prompt = `Com base no histórico e contexto fornecido, sugira 3-5 projetos estratégicos inovadores que se alinhem com os objetivos da empresa. Para cada projeto, forneça:
 

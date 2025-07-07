@@ -1,814 +1,340 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart3, Sparkles, Plus, Settings, FileText } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import PortfolioChart from "./PortfolioChart";
-import { useSession } from "@/hooks/useSession";
-import { useStrategyStorage } from "@/hooks/useStrategyStorage";
-import AccessCodeInput from "./AccessCodeInput";
-import { supabase } from "@/integrations/supabase/client";
+import React, { useState, useEffect } from 'react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "@/hooks/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Loader2, Lightbulb } from "lucide-react"
+import { supabase } from '@/integrations/supabase/client';
+import { Tables } from '@/integrations/supabase/types';
+import { useClickCounter } from '@/hooks/useClickCounter';
+import { useSession } from '@/hooks/useSession';
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   impact: number;
   complexity: number;
-  category: "Core" | "Adjacente" | "Transformacional";
+  category: string;
   selected: boolean;
   description?: string;
   expectedReturn?: string;
 }
 
 const StrategyPlatform = () => {
-  const { sessionId, accessCode, isLoading: sessionLoading, createOrLoadSession, clearSession, hasSession } = useSession();
-  const { strategySession, saveStrategySession, isLoading: storageLoading } = useStrategyStorage(sessionId);
-  
-  const [portfolioName, setPortfolioName] = useState("Novo Portfólio de Inovação");
-  const [context, setContext] = useState({
-    history: "",
-    initiatives: ""
-  });
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [currentProject, setCurrentProject] = useState({
-    name: "",
-    impact: 5,
-    complexity: 5,
-    category: "Core" as "Core" | "Adjacente" | "Transformacional",
-    expectedReturn: ""
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const [contextHistory, setContextHistory] = useState('');
+  const [contextInitiatives, setContextInitiatives] = useState('');
+  const [suggestedProjects, setSuggestedProjects] = useState<Project[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { sessionId } = useSession();
+  const { incrementProjectSuggestionsClicks } = useClickCounter(sessionId);
 
-  useEffect(() => {
-    if (strategySession) {
-      setPortfolioName(strategySession.portfolio_name);
-      setContext({
-        history: strategySession.context_history || "",
-        initiatives: strategySession.context_initiatives || ""
-      });
-      setProjects(strategySession.projects.map(p => ({
-        id: p.id ? parseInt(p.id) : Date.now(),
-        name: p.name,
-        impact: p.impact,
-        complexity: p.complexity,
-        category: p.category,
-        selected: p.selected,
-        description: p.description,
-        expectedReturn: p.expected_return
-      })));
-    }
-  }, [strategySession]);
+  const handleProjectSelection = (id: string) => {
+    setSuggestedProjects(
+      suggestedProjects.map(project =>
+        project.id === id ? { ...project, selected: !project.selected } : project
+      )
+    );
+  };
 
-  useEffect(() => {
-    if (hasSession && (portfolioName !== "Novo Portfólio de Inovação" || context.history || context.initiatives || projects.length > 0)) {
-      const timeoutId = setTimeout(() => {
-        const sessionData = {
-          id: strategySession?.id,
-          portfolio_name: portfolioName,
-          context_history: context.history,
-          context_initiatives: context.initiatives,
-          projects: projects.map(p => ({
-            id: p.id.toString(),
-            name: p.name,
-            impact: p.impact,
-            complexity: p.complexity,
-            category: p.category,
-            selected: p.selected,
-            description: p.description,
-            expected_return: p.expectedReturn
-          }))
-        };
-        saveStrategySession(sessionData);
-      }, 2000);
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [portfolioName, context, projects, hasSession, saveStrategySession, strategySession?.id]);
-
-  const addProject = () => {
-    if (!currentProject.name) {
+  const saveProjects = async () => {
+    if (!sessionId) {
       toast({
-        title: "Nome obrigatório",
-        description: "Insira o nome do projeto.",
+        title: "Sessão inválida",
+        description: "Por favor, inicie ou carregue uma sessão para salvar os projetos.",
         variant: "destructive"
       });
       return;
     }
 
-    const newProject: Project = {
-      id: Date.now(),
-      name: currentProject.name,
-      impact: currentProject.impact,
-      complexity: currentProject.complexity,
-      category: currentProject.category,
-      selected: true,
-      expectedReturn: currentProject.expectedReturn
-    };
+    const selectedProjects = suggestedProjects.filter(project => project.selected);
 
-    setProjects([...projects, newProject]);
-    setCurrentProject({ name: "", impact: 5, complexity: 5, category: "Core", expectedReturn: "" });
-    
-    toast({
-      title: "Projeto adicionado",
-      description: "Projeto adicionado ao portfólio com sucesso.",
-    });
+    if (selectedProjects.length === 0) {
+      toast({
+        title: "Nenhum projeto selecionado",
+        description: "Selecione pelo menos um projeto para salvar.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Fetch or create strategy_session
+      let strategySession: Tables<'strategy_sessions'> | null = null;
+      const { data: existingSession, error: sessionError } = await supabase
+        .from('strategy_sessions')
+        .select('*')
+        .eq('session_id', sessionId)
+        .single();
+
+      if (sessionError && sessionError.code !== 'PGRST116') {
+        console.error('Erro ao buscar sessão de estratégia:', sessionError);
+        toast({
+          title: "Erro",
+          description: "Erro ao buscar sessão de estratégia. Tente novamente.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (existingSession) {
+        strategySession = existingSession;
+      } else {
+        const { data: newSession, error: newSessionError } = await supabase
+          .from('strategy_sessions')
+          .insert({
+            session_id: sessionId,
+            portfolio_name: 'Estratégia Inicial',
+            context_history: contextHistory,
+            context_initiatives: contextInitiatives
+          })
+          .select('*')
+          .single();
+
+        if (newSessionError) {
+          console.error('Erro ao criar sessão de estratégia:', newSessionError);
+          toast({
+            title: "Erro",
+            description: "Erro ao criar sessão de estratégia. Tente novamente.",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        strategySession = newSession;
+      }
+
+      if (!strategySession) {
+        toast({
+          title: "Erro",
+          description: "Sessão de estratégia não encontrada ou criada.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Save projects
+      const projectsToSave = selectedProjects.map(project => ({
+        strategy_session_id: strategySession.id,
+        name: project.name,
+        impact: project.impact,
+        complexity: project.complexity,
+        category: project.category,
+        description: project.description,
+        expected_return: project.expectedReturn,
+        selected: project.selected
+      }));
+
+      const { error: insertError } = await supabase
+        .from('strategy_projects')
+        .insert(projectsToSave);
+
+      if (insertError) {
+        console.error('Erro ao salvar projetos:', insertError);
+        toast({
+          title: "Erro",
+          description: "Erro ao salvar projetos. Tente novamente.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      toast({
+        title: "Projetos salvos!",
+        description: "Seus projetos estratégicos foram salvos com sucesso.",
+      });
+
+    } catch (error) {
+      console.error('Erro ao salvar projetos:', error);
+      toast({
+        title: "Erro",
+        description: "Erro inesperado ao salvar projetos.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const toggleProjectSelection = (id: number) => {
-    setProjects(projects.map(p => 
-      p.id === id ? { ...p, selected: !p.selected } : p
-    ));
-  };
-
-  const updateProjectReturn = (id: number, expectedReturn: string) => {
-    setProjects(projects.map(p => 
-      p.id === id ? { ...p, expectedReturn } : p
-    ));
-  };
-
-  const generateAISuggestions = async () => {
-    if (!context.history && !context.initiatives) {
+  const generateSuggestions = async () => {
+    if (!contextHistory.trim() || !contextInitiatives.trim()) {
       toast({
         title: "Contexto necessário",
-        description: "Adicione informações sobre histórico ou iniciativas da empresa.",
+        description: "Por favor, preencha o histórico da empresa e iniciativas atuais.",
         variant: "destructive"
       });
       return;
     }
 
-    setIsLoading(true);
+    setIsGenerating(true);
     
     try {
-      const contextDescription = `${context.history} ${context.initiatives}`.trim();
+      // Incrementar contador de cliques
+      await incrementProjectSuggestionsClicks();
+
+      const contextDescription = `Histórico da empresa: ${contextHistory}\n\nIniciativas atuais: ${contextInitiatives}`;
       
       const { data, error } = await supabase.functions.invoke('ai-benchmarks', {
-        body: {
+        body: { 
           description: contextDescription,
           type: 'suggestions'
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro na função:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao gerar sugestões. Tente novamente.",
+          variant: "destructive"
+        });
+        return;
+      }
 
-      if (data.error) {
-        // Fallback to mock data if AI parsing fails
-        const suggestions: Project[] = [
+      if (data?.projects) {
+        setSuggestedProjects(data.projects.map((project: any) => ({
+          ...project,
+          id: Math.random().toString(36).substr(2, 9),
+          selected: true
+        })));
+        
+        toast({
+          title: "Sugestões geradas!",
+          description: "Projetos estratégicos foram sugeridos com base no seu contexto.",
+        });
+      } else if (data?.error) {
+        // Fallback para dados mock se o parsing falhar
+        const mockProjects = [
           {
-            id: Date.now() + 1,
-            name: "Plataforma de Analytics Avançada",
+            id: "mock-1",
+            name: "Transformação Digital",
+            category: "Transformacional",
             impact: 8,
             complexity: 7,
-            category: "Transformacional",
-            selected: true,
-            description: "Implementação de analytics preditivos para otimização de processos",
-            expectedReturn: ""
+            description: "Implementação de plataforma digital integrada",
+            expectedReturn: "Aumento de 30% na eficiência operacional",
+            selected: true
           },
           {
-            id: Date.now() + 2,
-            name: "Automação de Processos Críticos",
-            impact: 7,
-            complexity: 5,
-            category: "Core",
-            selected: true,
-            description: "Automatização de workflows operacionais principais",
-            expectedReturn: ""
-          },
-          {
-            id: Date.now() + 3,
-            name: "Hub de Inovação Digital",
-            impact: 9,
-            complexity: 8,
+            id: "mock-2", 
+            name: "Expansão de Mercado",
             category: "Adjacente",
-            selected: true,
-            description: "Centro de desenvolvimento de soluções digitais inovadoras",
-            expectedReturn: ""
+            impact: 7,
+            complexity: 6,
+            description: "Entrada em novos segmentos de mercado",
+            expectedReturn: "Crescimento de 25% na receita",
+            selected: true
           }
         ];
         
-        setProjects([...projects, ...suggestions]);
+        setSuggestedProjects(mockProjects);
         toast({
           title: "Sugestões geradas!",
-          description: `${suggestions.length} projetos foram sugeridos (usando dados padrão).`,
+          description: "Projetos estratégicos foram sugeridos (modo simplificado).",
         });
-      } else if (data.projects && Array.isArray(data.projects)) {
-        const suggestions: Project[] = data.projects.map((project: any, index: number) => ({
-          id: Date.now() + index + 1,
-          name: project.name || `Projeto ${index + 1}`,
-          impact: Math.min(Math.max(project.impact || 5, 1), 10),
-          complexity: Math.min(Math.max(project.complexity || 5, 1), 10),
-          category: ["Core", "Adjacente", "Transformacional"].includes(project.category) 
-            ? project.category 
-            : "Core",
-          selected: true,
-          description: project.description || "",
-          expectedReturn: project.expectedReturn || ""
-        }));
-
-        setProjects([...projects, ...suggestions]);
-        toast({
-          title: "Sugestões geradas pela IA!",
-          description: `${suggestions.length} projetos foram sugeridos com base no seu contexto.`,
-        });
-      } else {
-        throw new Error("Formato de resposta inválido da IA");
       }
-      
-    } catch (error: any) {
-      console.error("Error generating AI suggestions:", error);
+    } catch (error) {
+      console.error('Erro ao gerar sugestões:', error);
       toast({
-        title: "Erro na geração",
-        description: "Não foi possível gerar sugestões. Tente novamente.",
+        title: "Erro",
+        description: "Erro inesperado ao gerar sugestões.",
         variant: "destructive"
       });
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
   };
-
-  const generateReport = () => {
-    const selectedProjects = projects.filter(p => p.selected);
-    
-    if (selectedProjects.length === 0) {
-      toast({
-        title: "Nenhum projeto selecionado",
-        description: "Selecione pelo menos um projeto para gerar o relatório.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const avgImpact = selectedProjects.reduce((sum, p) => sum + p.impact, 0) / selectedProjects.length;
-    const avgComplexity = selectedProjects.reduce((sum, p) => sum + p.complexity, 0) / selectedProjects.length;
-    
-    const categoryDistribution = {
-      Core: selectedProjects.filter(p => p.category === "Core").length,
-      Adjacente: selectedProjects.filter(p => p.category === "Adjacente").length,
-      Transformacional: selectedProjects.filter(p => p.category === "Transformacional").length
-    };
-
-    const highImpactProjects = selectedProjects.filter(p => p.impact >= 8).length;
-    const lowComplexityProjects = selectedProjects.filter(p => p.complexity <= 4).length;
-    const projectsWithReturn = selectedProjects.filter(p => p.expectedReturn && p.expectedReturn.trim()).length;
-
-    const categoryColors = {
-      Core: '#3b82f6',
-      Adjacente: '#8b5cf6', 
-      Transformacional: '#ec4899'
-    };
-
-    const chartDots = selectedProjects.map(project => {
-      const cx = ((project.complexity - 1) / 9) * 90 + 5;
-      const cy = 95 - (((project.impact - 1) / 9) * 90);
-      
-      return `
-        <g class="chart-group">
-          <circle cx="${cx}%" cy="${cy}%" r="8" fill="${categoryColors[project.category]}" opacity="0.8" stroke="#fff" stroke-width="2"/>
-          <title>${project.name}</title>
-        </g>
-      `;
-    }).join('');
-
-    const gridLines = [];
-    for (let i = 1; i <= 9; i++) {
-      gridLines.push(`<line x1="${i * 10}%" y1="0" x2="${i * 10}%" y2="100" stroke="#e5e7eb" stroke-width="1"/>`);
-      gridLines.push(`<line x1="0" y1="${i * 10}%" x2="100" y2="${i * 10}%" stroke="#e5e7eb" stroke-width="1"/>`);
-    }
-
-    const chartSvg = `
-      <svg width="100%" height="400px" viewBox="0 0 100 100" preserveAspectRatio="none" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 2px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-        ${gridLines.join('')}
-        <text x="-45" y="8" style="font-size: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #64748b; font-weight: 600;" transform="rotate(-90)">IMPACTO</text>
-        <text x="45" y="108" style="font-size: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #64748b; font-weight: 600;">COMPLEXIDADE</text>
-        ${chartDots}
-      </svg>
-    `;
-
-    const reportContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Relatório Estratégico - ${portfolioName}</title>
-          <style>
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-              margin: 2rem; 
-              color: #1f2937; 
-              line-height: 1.6;
-              background: #fafafa;
-            }
-            .container {
-              max-width: 1200px;
-              margin: 0 auto;
-              background: white;
-              padding: 3rem;
-              border-radius: 16px;
-              box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            }
-            .header { 
-              display: flex; 
-              justify-content: space-between; 
-              align-items: center; 
-              border-bottom: 4px solid #22c55e; 
-              padding-bottom: 2rem; 
-              margin-bottom: 3rem; 
-            }
-            .logo { 
-              font-size: 2.5rem; 
-              font-weight: 700; 
-              background: linear-gradient(135deg, #0ea5e9 0%, #22c55e 100%); 
-              -webkit-background-clip: text; 
-              -webkit-text-fill-color: transparent; 
-            }
-            .overview {
-              background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-              padding: 2rem;
-              border-radius: 12px;
-              margin-bottom: 2rem;
-              border-left: 4px solid #0ea5e9;
-            }
-            .overview-grid {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-              gap: 1.5rem;
-              margin-top: 1rem;
-            }
-            .overview-card {
-              background: white;
-              padding: 1.5rem;
-              border-radius: 8px;
-              text-align: center;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .overview-value {
-              font-size: 2rem;
-              font-weight: bold;
-              color: #0ea5e9;
-              display: block;
-            }
-            .overview-label {
-              color: #6b7280;
-              font-size: 0.875rem;
-              margin-top: 0.5rem;
-            }
-            .chart-section {
-              margin: 3rem 0;
-              padding: 2rem;
-              background: #f8fafc;
-              border-radius: 12px;
-              border: 1px solid #e2e8f0;
-            }
-            .projects-table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              margin-top: 2rem; 
-              background: white;
-              border-radius: 8px;
-              overflow: hidden;
-              box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-            }
-            .projects-table th, .projects-table td { 
-              border: 1px solid #e5e7eb; 
-              padding: 1rem; 
-              text-align: left; 
-            }
-            .projects-table th { 
-              background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); 
-              font-weight: 700; 
-              color: #374151;
-              text-transform: uppercase;
-              font-size: 0.875rem;
-              letter-spacing: 0.05em;
-            }
-            .category-core { background-color: #dbeafe; color: #1e40af; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
-            .category-adjacente { background-color: #e9d5ff; color: #581c87; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
-            .category-transformacional { background-color: #fce7f3; color: #831843; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
-            .legend {
-              display: flex;
-              gap: 2rem;
-              justify-content: center;
-              margin-top: 1rem;
-              flex-wrap: wrap;
-            }
-            .legend-item {
-              display: flex;
-              align-items: center;
-              gap: 0.5rem;
-              font-size: 0.875rem;
-              font-weight: 500;
-            }
-            .legend-dot {
-              width: 16px;
-              height: 16px;
-              border-radius: 50%;
-              border: 2px solid #fff;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            @media print { 
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .container { box-shadow: none; margin: 0; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <div class="logo">Cubo Estratégia</div>
-              <div>
-                <h1 style="margin: 0; color: #374151; font-size: 2rem;">${portfolioName}</h1>
-                <p style="margin: 0; color: #6b7280; font-size: 1.125rem;">Relatório gerado em: ${new Date().toLocaleDateString('pt-BR')}</p>
-              </div>
-            </div>
-            
-            <div class="overview">
-              <h2 style="margin: 0 0 1rem 0; color: #0ea5e9;">📊 Visão Geral do Portfólio Estratégico</h2>
-              <div class="overview-grid">
-                <div class="overview-card">
-                  <span class="overview-value">${selectedProjects.length}</span>
-                  <div class="overview-label">Projetos Selecionados</div>
-                </div>
-                <div class="overview-card">
-                  <span class="overview-value">${avgImpact.toFixed(1)}</span>
-                  <div class="overview-label">Impacto Médio</div>
-                </div>
-                <div class="overview-card">
-                  <span class="overview-value">${avgComplexity.toFixed(1)}</span>
-                  <div class="overview-label">Complexidade Média</div>
-                </div>
-                <div class="overview-card">
-                  <span class="overview-value">${highImpactProjects}</span>
-                  <div class="overview-label">Alto Impacto (≥8)</div>
-                </div>
-                <div class="overview-card">
-                  <span class="overview-value">${lowComplexityProjects}</span>
-                  <div class="overview-label">Baixa Complexidade (≤4)</div>
-                </div>
-                <div class="overview-card">
-                  <span class="overview-value">${projectsWithReturn}</span>
-                  <div class="overview-label">Com Retorno Definido</div>
-                </div>
-              </div>
-              
-              <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
-                <h3 style="margin: 0 0 1rem 0; color: #374151;">Distribuição por Categoria:</h3>
-                <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
-                  <div style="text-align: center;">
-                    <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">${categoryDistribution.Core}</div>
-                    <div style="font-size: 0.875rem; color: #6b7280;">Core</div>
-                  </div>
-                  <div style="text-align: center;">
-                    <div style="font-size: 1.5rem; font-weight: bold; color: #8b5cf6;">${categoryDistribution.Adjacente}</div>
-                    <div style="font-size: 0.875rem; color: #6b7280;">Adjacente</div>
-                  </div>
-                  <div style="text-align: center;">
-                    <div style="font-size: 1.5rem; font-weight: bold; color: #ec4899;">${categoryDistribution.Transformacional}</div>
-                    <div style="font-size: 0.875rem; color: #6b7280;">Transformacional</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="chart-section">
-              <h2 style="color: #374151; margin-bottom: 1.5rem; font-size: 1.5rem;">Matriz Estratégica: Impacto vs Complexidade</h2>
-              ${chartSvg}
-              <div class="legend">
-                <div class="legend-item">
-                  <div class="legend-dot" style="background-color: #3b82f6;"></div>
-                  <span>Core</span>
-                </div>
-                <div class="legend-item">
-                  <div class="legend-dot" style="background-color: #8b5cf6;"></div>
-                  <span>Adjacente</span>
-                </div>
-                <div class="legend-item">
-                  <div class="legend-dot" style="background-color: #ec4899;"></div>
-                  <span>Transformacional</span>
-                </div>
-              </div>
-            </div>
-            
-            <h2 style="color: #374151; margin-bottom: 1.5rem; font-size: 1.5rem;">Projetos Estratégicos Selecionados</h2>
-            <table class="projects-table">
-              <thead>
-                <tr>
-                  <th>Projeto</th>
-                  <th>Categoria</th>
-                  <th>Impacto</th>
-                  <th>Complexidade</th>
-                  <th>Retorno Esperado</th>
-                  <th>Descrição</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${selectedProjects.map(p => `
-                  <tr>
-                    <td style="font-weight: 600; color: #1f2937;">${p.name}</td>
-                    <td><span class="category-${p.category.toLowerCase()}">${p.category}</span></td>
-                    <td style="text-align: center; font-weight: 600; color: #059669;">${p.impact}</td>
-                    <td style="text-align: center; font-weight: 600; color: #dc2626;">${p.complexity}</td>
-                    <td style="font-weight: 600; color: #0ea5e9;">${p.expectedReturn || 'N/A'}</td>
-                    <td style="color: #6b7280;">${p.description || 'N/A'}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-            
-            <div style="margin-top: 3rem; padding-top: 2rem; border-top: 2px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 0.875rem;">
-              <strong>Relatório confidencial gerado pela Plataforma Cubo Estratégia</strong><br>
-              Este documento contém informações estratégicas sensíveis e deve ser tratado com confidencialidade.
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    const newWindow = window.open('', '_blank');
-    if (newWindow) {
-      newWindow.document.write(reportContent);
-      newWindow.document.close();
-      newWindow.focus();
-      setTimeout(() => newWindow.print(), 500);
-    }
-  };
-
-  if (!hasSession) {
-    return (
-      <div className="space-y-8 animate-fade-in">
-        <div className="bg-gradient-success rounded-2xl p-8 text-white">
-          <div className="flex items-center space-x-4 mb-4">
-            <BarChart3 className="h-10 w-10" />
-            <div>
-              <h1 className="text-3xl font-bold">Plataforma de Estratégia com IA</h1>
-              <p className="text-xl opacity-90">
-                Construa portfólios estratégicos com sugestões inteligentes.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <AccessCodeInput
-          onSubmit={createOrLoadSession}
-          isLoading={sessionLoading}
-        />
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Header */}
-      <div className="bg-gradient-success rounded-2xl p-8 text-white">
-        <div className="flex items-center space-x-4 mb-4">
-          <BarChart3 className="h-10 w-10" />
-          <div>
-            <h1 className="text-3xl font-bold">Plataforma de Estratégia com IA</h1>
-            <p className="text-xl opacity-90">
-              Construa portfólios estratégicos com sugestões inteligentes.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Access Code Status */}
-      <AccessCodeInput
-        onSubmit={createOrLoadSession}
-        isLoading={sessionLoading}
-        currentCode={accessCode}
-        onClear={clearSession}
-      />
-
-      {/* Configuration */}
-      <Card className="border-0 shadow-lg">
+    <div className="space-y-6">
+      <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Settings className="h-5 w-5" />
-            <span>Configuração do Portfólio</span>
+          <CardTitle className="flex items-center gap-2">
+            <Lightbulb className="w-5 h-5" />
+            Plataforma de Estratégia
           </CardTitle>
+          <CardDescription>
+            Defina o contexto da sua empresa para gerar projetos estratégicos.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="portfolioName">Nome do Portfólio</Label>
-            <Input
-              id="portfolioName"
-              value={portfolioName}
-              onChange={(e) => setPortfolioName(e.target.value)}
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="history">Histórico e Contexto da Empresa</Label>
+            <Label htmlFor="contextHistory">Histórico da Empresa</Label>
             <Textarea
-              id="history"
-              value={context.history}
-              onChange={(e) => setContext({ ...context, history: e.target.value })}
-              placeholder="Missão, visão, valores, SWOT, principais produtos..."
+              id="contextHistory"
+              placeholder="Descreva o histórico relevante da empresa..."
+              value={contextHistory}
+              onChange={(e) => setContextHistory(e.target.value)}
+              className="mt-1"
               rows={3}
             />
           </div>
-          
           <div>
-            <Label htmlFor="initiatives">Iniciativas e Pilares Estratégicos</Label>
+            <Label htmlFor="contextInitiatives">Iniciativas Atuais</Label>
             <Textarea
-              id="initiatives"
-              value={context.initiatives}
-              onChange={(e) => setContext({ ...context, initiatives: e.target.value })}
-              placeholder="Ex: 1. Expandir para a América Latina. 2. Lançar produto para o público jovem."
+              id="contextInitiatives"
+              placeholder="Descreva as iniciativas estratégicas atuais..."
+              value={contextInitiatives}
+              onChange={(e) => setContextInitiatives(e.target.value)}
+              className="mt-1"
               rows={3}
             />
           </div>
+          <Button
+            onClick={generateSuggestions}
+            disabled={isGenerating || !contextHistory.trim() || !contextInitiatives.trim()}
+            className="w-full"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Gerando Sugestões...
+              </>
+            ) : (
+              "Gerar Sugestões de Projetos"
+            )}
+          </Button>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Chart */}
-        <div className="lg:col-span-2">
-          <Card className="border-0 shadow-lg h-full">
-            <CardHeader>
-              <CardTitle>Visualização: Impacto vs Complexidade</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PortfolioChart projects={projects.filter(p => p.selected)} />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Controls */}
-        <div className="space-y-6">
-          {/* AI Suggestions */}
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-6 text-center">
-              <Button 
-                onClick={generateAISuggestions}
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
-                size="lg"
-              >
-                {isLoading ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                ) : (
-                  <Sparkles className="mr-2 h-4 w-4" />
-                )}
-                {isLoading ? "Gerando..." : "Sugerir Projetos com IA"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Add Project */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Plus className="h-5 w-5" />
-                <span>Adicionar Projeto</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="projectName">Nome do Projeto</Label>
-                <Input
-                  id="projectName"
-                  value={currentProject.name}
-                  onChange={(e) => setCurrentProject({ ...currentProject, name: e.target.value })}
-                  placeholder="Nome do Projeto"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="expectedReturn">Retorno Esperado</Label>
-                <Input
-                  id="expectedReturn"
-                  value={currentProject.expectedReturn}
-                  onChange={(e) => setCurrentProject({ ...currentProject, expectedReturn: e.target.value })}
-                  placeholder="Ex: R$ 2.5M, 15% ROI, 200% crescimento"
-                />
-              </div>
-              
-              <div>
-                <Label>Impacto: {currentProject.impact}</Label>
-                <Input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={currentProject.impact}
-                  onChange={(e) => setCurrentProject({ ...currentProject, impact: parseInt(e.target.value) })}
-                  className="w-full accent-innovation-500"
-                />
-              </div>
-              
-              <div>
-                <Label>Complexidade: {currentProject.complexity}</Label>
-                <Input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={currentProject.complexity}
-                  onChange={(e) => setCurrentProject({ ...currentProject, complexity: parseInt(e.target.value) })}
-                  className="w-full accent-corporate-500"
-                />
-              </div>
-              
-              <div>
-                <Label>Categoria</Label>
-                <Select 
-                  value={currentProject.category} 
-                  onValueChange={(value: "Core" | "Adjacente" | "Transformacional") => 
-                    setCurrentProject({ ...currentProject, category: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Core">Core</SelectItem>
-                    <SelectItem value="Adjacente">Adjacente</SelectItem>
-                    <SelectItem value="Transformacional">Transformacional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <Button onClick={addProject} className="w-full bg-gradient-to-r from-gray-700 to-gray-800">
-                Adicionar Manualmente
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Projects List */}
-          {projects.length > 0 && (
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle>Projetos Atuais</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-80 overflow-y-auto">
-                  {projects.map((project) => (
-                    <div key={project.id} className="border rounded-lg p-3 bg-gray-50">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <input
-                          type="checkbox"
-                          checked={project.selected}
-                          onChange={() => toggleProjectSelection(project.id)}
-                          className="rounded border-gray-300 text-corporate-500 focus:ring-corporate-500"
-                        />
-                        <label className="text-sm font-medium text-gray-700 flex-1">
-                          {project.name}
-                        </label>
-                      </div>
-                      <div className="pl-6">
-                        <Input
-                          placeholder="Retorno esperado..."
-                          value={project.expectedReturn || ""}
-                          onChange={(e) => updateProjectReturn(project.id, e.target.value)}
-                          className="text-xs h-8"
-                        />
-                      </div>
-                    </div>
-                  ))}
+      {suggestedProjects.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Projetos Estratégicos Sugeridos</CardTitle>
+            <CardDescription>
+              Selecione os projetos mais relevantes para sua estratégia.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {suggestedProjects.map((project) => (
+              <div key={project.id} className="border rounded-md p-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`project-${project.id}`} className="font-semibold">
+                    {project.name} ({project.category})
+                  </Label>
+                  <Checkbox
+                    id={`project-${project.id}`}
+                    checked={project.selected}
+                    onCheckedChange={() => handleProjectSelection(project.id)}
+                  />
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-
-      {/* Enhanced Actions Section */}
-      <Card className="border-0 shadow-xl bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-l-green-500">
-        <CardContent className="p-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-            <div className="flex-1">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                📈 Pronto para Gerar seu Relatório Estratégico?
-              </h3>
-              <p className="text-gray-600 text-lg">
-                Compile todos os projetos selecionados em um relatório profissional completo 
-                com gráficos interativos, análise de retorno esperado e matriz estratégica.
-              </p>
-              <div className="flex items-center mt-3 text-sm text-green-700">
-                <FileText className="h-4 w-4 mr-2" />
-                <span className="font-medium">
-                  {projects.filter(p => p.selected).length} projetos selecionados para o relatório
-                </span>
+                <p className="text-sm text-gray-500">Impacto: {project.impact} | Complexidade: {project.complexity}</p>
+                <p className="text-gray-700">{project.description}</p>
+                <p className="text-gray-600">Retorno Esperado: {project.expectedReturn}</p>
               </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button variant="outline" onClick={() => setProjects([])} size="lg">
-                Limpar Projetos
-              </Button>
-              <Button 
-                onClick={generateReport} 
-                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white text-lg px-8 py-3 h-auto"
-                size="lg"
-                disabled={projects.filter(p => p.selected).length === 0}
-              >
-                <FileText className="mr-3 h-6 w-6" />
-                Gerar Relatório Estratégico Completo
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            ))}
+            <Button onClick={saveProjects} className="w-full">
+              Salvar Projetos Selecionados
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

@@ -176,20 +176,26 @@ export type Database = {
       user_sessions: {
         Row: {
           access_code: string
+          benchmark_clicks: number | null
           created_at: string
           id: string
+          project_suggestions_clicks: number | null
           updated_at: string
         }
         Insert: {
           access_code: string
+          benchmark_clicks?: number | null
           created_at?: string
           id?: string
+          project_suggestions_clicks?: number | null
           updated_at?: string
         }
         Update: {
           access_code?: string
+          benchmark_clicks?: number | null
           created_at?: string
           id?: string
+          project_suggestions_clicks?: number | null
           updated_at?: string
         }
         Relationships: []
