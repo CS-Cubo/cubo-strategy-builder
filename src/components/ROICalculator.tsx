@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -142,7 +143,6 @@ const ROICalculator = () => {
         toast({
           title: "Atenção",
           description: "Resultados não estão sendo salvos. Insira um código de acesso.",
-          variant: "warning"
         });
       }
     } catch (error) {

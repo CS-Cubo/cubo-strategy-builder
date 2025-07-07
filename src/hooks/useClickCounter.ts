@@ -12,10 +12,24 @@ export const useClickCounter = (sessionId: string | null) => {
 
     setIsUpdating(true);
     try {
+      // Primeiro buscar o valor atual
+      const { data: currentData, error: fetchError } = await supabase
+        .from('user_sessions')
+        .select('benchmark_clicks')
+        .eq('id', sessionId)
+        .single();
+
+      if (fetchError) {
+        console.error('Erro ao buscar benchmark clicks:', fetchError);
+        return;
+      }
+
+      const currentClicks = currentData?.benchmark_clicks || 0;
+
       const { error } = await supabase
         .from('user_sessions')
         .update({ 
-          benchmark_clicks: supabase.raw('benchmark_clicks + 1')
+          benchmark_clicks: currentClicks + 1
         })
         .eq('id', sessionId);
 
@@ -34,10 +48,24 @@ export const useClickCounter = (sessionId: string | null) => {
 
     setIsUpdating(true);
     try {
+      // Primeiro buscar o valor atual
+      const { data: currentData, error: fetchError } = await supabase
+        .from('user_sessions')
+        .select('project_suggestions_clicks')
+        .eq('id', sessionId)
+        .single();
+
+      if (fetchError) {
+        console.error('Erro ao buscar project suggestions clicks:', fetchError);
+        return;
+      }
+
+      const currentClicks = currentData?.project_suggestions_clicks || 0;
+
       const { error } = await supabase
         .from('user_sessions')
         .update({ 
-          project_suggestions_clicks: supabase.raw('project_suggestions_clicks + 1')
+          project_suggestions_clicks: currentClicks + 1
         })
         .eq('id', sessionId);
 
