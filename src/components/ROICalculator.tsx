@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { useSession } from "@/hooks/useSession";
 import { useROIStorage } from "@/hooks/useROIStorage";
 import AccessCodeInput from "./AccessCodeInput";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from "@/components/ui/drawer";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SimpleProject {
   id?: string;
@@ -58,10 +60,11 @@ const formatNumber = (value: number) => {
 };
 
 const ROICalculator = () => {
-  const [benchmarkDescription, setBenchmarkDescription] = useState('');
+  const [benchmarkDrawerOpen, setBenchmarkDrawerOpen] = useState(false);
   const [benchmarkResult, setBenchmarkResult] = useState<string | null>(null);
   const [benchmarkLoading, setBenchmarkLoading] = useState(false);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  
   const { sessionId, accessCode, isLoading: sessionLoading, createOrLoadSession, clearSession, hasSession } = useSession();
   const { projects: dbProjects, saveProject, deleteProject, isLoading: storageLoading } = useROIStorage(sessionId);
   
@@ -124,6 +127,29 @@ const ROICalculator = () => {
       setStrategicProjects(strategic);
     }
   }, [dbProjects]);
+
+  const fetchBenchmarks = async (description: string) => {
+    setBenchmarkResult(null);
+    setBenchmarkError(null);
+    setBenchmarkLoading(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-benchmarks', {
+        body: {
+          description,
+          type: 'benchmark'
+        }
+      });
+
+      if (error) throw error;
+      
+      setBenchmarkResult(data.text);
+    } catch (err: any) {
+      setBenchmarkError(err.message || 'Erro ao buscar benchmarks');
+    } finally {
+      setBenchmarkLoading(false);
+    }
+  };
 
   const calculateSimpleROI = () => {
     if (!simpleForm.projectName) {
@@ -568,50 +594,21 @@ const ROICalculator = () => {
                         placeholder="Descreva o projeto..."
                         rows={3}
                       />
-
                       
-                      <section style={{ background: "#222", padding: 16, borderRadius: 8, marginBottom: 24, marginTop: 16 }}>
-                        <h3>Buscar Benchmarks de ROI (Beta)</h3>
-                        <textarea
-                          value={benchmarkDescription}
-                          onChange={e => setBenchmarkDescription(e.target.value)}
-                          placeholder="Descreva seu projeto para buscar benchmarks..."
-                          rows={3}
-                          style={{ width: "100%", marginBottom: 8 }}
-                        />
-                        <button
-                          onClick={async () => {
-                            setBenchmarkResult(null);
-                            setBenchmarkError(null);
-                            setBenchmarkLoading(true);
-                            try {
-                              const apiKey = "HHHHHHHHHHHHHHHHHHHH"; // REMOVE before pushing to public!
-                              const result = await fetchBenchmarks(benchmarkDescription, apiKey);
-                              setBenchmarkResult(result);
-                            } catch (err: any) {
-                              setBenchmarkError(err.message);
-                            } finally {
-                              setBenchmarkLoading(false);
-                            }
+                      {simpleForm.projectDescription && (
+                        <Button
+                          onClick={() => {
+                            fetchBenchmarks(simpleForm.projectDescription);
+                            setBenchmarkDrawerOpen(true);
                           }}
-                          disabled={benchmarkLoading || !benchmarkDescription}
-                          style={{ background: "#f28500", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px" }}
+                          variant="outline"
+                          className="mt-2 w-full"
+                          disabled={benchmarkLoading}
                         >
-                          {benchmarkLoading ? "Buscando..." : "Buscar Benchmarks"}
-                        </button>
-                        {benchmarkResult && (
-                          <div style={{ marginTop: 16, whiteSpace: 'pre-wrap', color: "#ccc" }}>
-                            {benchmarkResult}
-                          </div>
-                        )}
-                        {benchmarkError && (
-                          <div style={{ marginTop: 16, color: "red" }}>
-                            {benchmarkError}
-                          </div>
-                        )}
-                      </section>
-
-                      
+                          <TrendingUp className="h-4 w-4 mr-2" />
+                          {benchmarkLoading ? "Buscando..." : "Buscar Benchmarks de Mercado"}
+                        </Button>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="simple-roi">Expected ROI (%)</Label>
@@ -649,6 +646,20 @@ const ROICalculator = () => {
                         rows={3}
                       />
                       
+                      {strategicForm.projectDescription && (
+                        <Button
+                          onClick={() => {
+                            fetchBenchmarks(strategicForm.projectDescription);
+                            setBenchmarkDrawerOpen(true);
+                          }}
+                          variant="outline"
+                          className="mt-2 w-full"
+                          disabled={benchmarkLoading}
+                        >
+                          <TrendingUp className="h-4 w-4 mr-2" />
+                          {benchmarkLoading ? "Buscando..." : "Buscar Benchmarks de Mercado"}
+                        </Button>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="strategic-investment">Investimento Esperado</Label>
@@ -816,37 +827,61 @@ const ROICalculator = () => {
           </div>
         </div>
 
-        
+        {/* Benchmarks Drawer */}
+        <Drawer open={benchmarkDrawerOpen} onOpenChange={setBenchmarkDrawerOpen}>
+          <DrawerContent className="max-w-4xl mx-auto h-[80vh]">
+            <DrawerHeader className="border-b">
+              <div className="flex items-center justify-between">
+                <DrawerTitle className="text-xl font-bold">
+                  📊 Benchmarks de Mercado
+                </DrawerTitle>
+                <DrawerClose asChild>
+                  <Button variant="ghost" size="sm">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </DrawerClose>
+              </div>
+            </DrawerHeader>
+            <div className="p-6 overflow-y-auto">
+              {benchmarkLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-gray-600">Buscando benchmarks...</span>
+                </div>
+              )}
+              
+              {benchmarkError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h3 className="font-medium text-red-800 mb-2">Erro ao buscar benchmarks</h3>
+                  <p className="text-red-600">{benchmarkError}</p>
+                </div>
+              )}
+              
+              {benchmarkResult && (
+                <div className="bg-white rounded-lg border p-6">
+                  <h3 className="font-bold text-lg mb-4 text-gray-800">
+                    Análise de Benchmarks
+                  </h3>
+                  <div className="prose max-w-none">
+                    <pre className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                      {benchmarkResult}
+                    </pre>
+                  </div>
+                </div>
+              )}
+              
+              {!benchmarkLoading && !benchmarkError && !benchmarkResult && (
+                <div className="text-center py-8 text-gray-500">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Os benchmarks aparecerão aqui após a busca.</p>
+                </div>
+              )}
+            </div>
+          </DrawerContent>
+        </Drawer>
+      </div>
     </TooltipProvider>
   );
 };
-
-// --- Gemini Benchmark API fetch function ---
-// Uncomment after you add the UI code!
- async function fetchBenchmarks(description: string, apiKey: string): Promise<string> {
-   const prompt = `Com base na seguinte descrição de projeto, forneça um resumo de benchmarks de ROI para iniciativas semelhantes. A resposta deve ser em português e bem estruturada. Inclua: 1. Faixa de ROI comum (ex: 15-25%). 2. Fatores que influenciam esse ROI. 3. 2-3 exemplos públicos ou estudos de caso, cada um com link [Nome da Fonte](URL). Descrição do projeto: "${description}"`;
-   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-   const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-
-   try {
-     const response = await fetch(apiUrl, {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify(payload),
-     });
-     if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-     const result = await response.json();
-     const text =
-       result.candidates &&
-       result.candidates[0] &&
-       result.candidates[0].content &&
-       result.candidates[0].content.parts &&
-       result.candidates[0].content.parts[0].text;
-     return text || "Nenhum benchmark encontrado.";
-   } catch (err: any) {
-     return `Erro ao buscar benchmark: ${err.message}`;
-   }
- }
-
 
 export default ROICalculator;

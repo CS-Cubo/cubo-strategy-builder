@@ -11,6 +11,7 @@ import PortfolioChart from "./PortfolioChart";
 import { useSession } from "@/hooks/useSession";
 import { useStrategyStorage } from "@/hooks/useStrategyStorage";
 import AccessCodeInput from "./AccessCodeInput";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Project {
   id: number;
@@ -143,48 +144,82 @@ const StrategyPlatform = () => {
     setIsLoading(true);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const contextDescription = `${context.history} ${context.initiatives}`.trim();
       
-      const suggestions: Project[] = [
-        {
-          id: Date.now() + 1,
-          name: "Plataforma de Analytics Avançada",
-          impact: 8,
-          complexity: 7,
-          category: "Transformacional",
-          selected: true,
-          description: "Implementação de analytics preditivos para otimização de processos",
-          expectedReturn: ""
-        },
-        {
-          id: Date.now() + 2,
-          name: "Automação de Processos Críticos",
-          impact: 7,
-          complexity: 5,
-          category: "Core",
-          selected: true,
-          description: "Automatização de workflows operacionais principais",
-          expectedReturn: ""
-        },
-        {
-          id: Date.now() + 3,
-          name: "Hub de Inovação Digital",
-          impact: 9,
-          complexity: 8,
-          category: "Adjacente",
-          selected: true,
-          description: "Centro de desenvolvimento de soluções digitais inovadoras",
-          expectedReturn: ""
+      const { data, error } = await supabase.functions.invoke('ai-benchmarks', {
+        body: {
+          description: contextDescription,
+          type: 'suggestions'
         }
-      ];
-
-      setProjects([...projects, ...suggestions]);
-      
-      toast({
-        title: "Sugestões geradas!",
-        description: `${suggestions.length} projetos foram sugeridos pela IA.`,
       });
-    } catch (error) {
+
+      if (error) throw error;
+
+      if (data.error) {
+        // Fallback to mock data if AI parsing fails
+        const suggestions: Project[] = [
+          {
+            id: Date.now() + 1,
+            name: "Plataforma de Analytics Avançada",
+            impact: 8,
+            complexity: 7,
+            category: "Transformacional",
+            selected: true,
+            description: "Implementação de analytics preditivos para otimização de processos",
+            expectedReturn: ""
+          },
+          {
+            id: Date.now() + 2,
+            name: "Automação de Processos Críticos",
+            impact: 7,
+            complexity: 5,
+            category: "Core",
+            selected: true,
+            description: "Automatização de workflows operacionais principais",
+            expectedReturn: ""
+          },
+          {
+            id: Date.now() + 3,
+            name: "Hub de Inovação Digital",
+            impact: 9,
+            complexity: 8,
+            category: "Adjacente",
+            selected: true,
+            description: "Centro de desenvolvimento de soluções digitais inovadoras",
+            expectedReturn: ""
+          }
+        ];
+        
+        setProjects([...projects, ...suggestions]);
+        toast({
+          title: "Sugestões geradas!",
+          description: `${suggestions.length} projetos foram sugeridos (usando dados padrão).`,
+        });
+      } else if (data.projects && Array.isArray(data.projects)) {
+        const suggestions: Project[] = data.projects.map((project: any, index: number) => ({
+          id: Date.now() + index + 1,
+          name: project.name || `Projeto ${index + 1}`,
+          impact: Math.min(Math.max(project.impact || 5, 1), 10),
+          complexity: Math.min(Math.max(project.complexity || 5, 1), 10),
+          category: ["Core", "Adjacente", "Transformacional"].includes(project.category) 
+            ? project.category 
+            : "Core",
+          selected: true,
+          description: project.description || "",
+          expectedReturn: project.expectedReturn || ""
+        }));
+
+        setProjects([...projects, ...suggestions]);
+        toast({
+          title: "Sugestões geradas pela IA!",
+          description: `${suggestions.length} projetos foram sugeridos com base no seu contexto.`,
+        });
+      } else {
+        throw new Error("Formato de resposta inválido da IA");
+      }
+      
+    } catch (error: any) {
+      console.error("Error generating AI suggestions:", error);
       toast({
         title: "Erro na geração",
         description: "Não foi possível gerar sugestões. Tente novamente.",
