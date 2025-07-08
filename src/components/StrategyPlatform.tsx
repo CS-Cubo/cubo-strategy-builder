@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -33,12 +32,10 @@ interface Project {
 }
 
 const StrategyPlatform = () => {
-  // Portfolio Configuration
   const [portfolioName, setPortfolioName] = useState('');
   const [contextHistory, setContextHistory] = useState('');
   const [contextInitiatives, setContextInitiatives] = useState('');
   
-  // Manual Project Addition
   const [newProject, setNewProject] = useState({
     name: '',
     expectedReturn: '',
@@ -53,7 +50,6 @@ const StrategyPlatform = () => {
   const { sessionId } = useSession();
   const { incrementProjectSuggestionsClicks } = useClickCounter(sessionId);
 
-  // Load existing data
   useEffect(() => {
     if (sessionId) {
       loadExistingData();
@@ -82,7 +78,6 @@ const StrategyPlatform = () => {
         setContextHistory(session.context_history || '');
         setContextInitiatives(session.context_initiatives || '');
 
-        // Load projects
         const { data: projects, error: projectsError } = await supabase
           .from('strategy_projects')
           .select('*')
@@ -167,7 +162,6 @@ const StrategyPlatform = () => {
     }
 
     try {
-      // Save or update strategy session
       const { data: existingSession } = await supabase
         .from('strategy_sessions')
         .select('*')
@@ -299,47 +293,50 @@ const StrategyPlatform = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full p-4">
       {/* Left Column - Configuration */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Lightbulb className="w-5 h-5" />
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Lightbulb className="w-4 h-4" />
               Configuração do Portfólio
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="portfolioName">Nome do Portfólio</Label>
+          <CardContent className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="portfolioName" className="text-sm">Nome do Portfólio</Label>
               <Input
                 id="portfolioName"
                 value={portfolioName}
                 onChange={(e) => setPortfolioName(e.target.value)}
                 placeholder="Ex: Estratégia Digital 2024"
+                className="text-sm"
               />
             </div>
-            <div>
-              <Label htmlFor="contextHistory">Histórico e Contexto</Label>
+            <div className="space-y-1">
+              <Label htmlFor="contextHistory" className="text-sm">Histórico e Contexto</Label>
               <Textarea
                 id="contextHistory"
                 value={contextHistory}
                 onChange={(e) => setContextHistory(e.target.value)}
                 placeholder="Descreva o histórico relevante da empresa..."
-                rows={3}
+                rows={2}
+                className="text-sm"
               />
             </div>
-            <div>
-              <Label htmlFor="contextInitiatives">Iniciativas e Pilares</Label>
+            <div className="space-y-1">
+              <Label htmlFor="contextInitiatives" className="text-sm">Iniciativas e Pilares</Label>
               <Textarea
                 id="contextInitiatives"
                 value={contextInitiatives}
                 onChange={(e) => setContextInitiatives(e.target.value)}
                 placeholder="Descreva as iniciativas estratégicas e pilares..."
-                rows={3}
+                rows={2}
+                className="text-sm"
               />
             </div>
-            <Button onClick={saveConfiguration} className="w-full">
+            <Button onClick={saveConfiguration} className="w-full text-sm" size="sm">
               Salvar Configuração
             </Button>
           </CardContent>
@@ -348,10 +345,10 @@ const StrategyPlatform = () => {
         {/* Portfolio Chart */}
         {currentProjects.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Matriz de Portfólio</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Matriz de Portfólio</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3">
               <PortfolioChart projects={currentProjects.map(p => ({
                 id: parseInt(p.id, 36),
                 name: p.name,
@@ -366,21 +363,22 @@ const StrategyPlatform = () => {
       </div>
 
       {/* Right Column - Projects */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* AI Suggestions */}
         <Card>
-          <CardHeader>
-            <CardTitle>Sugerir Projetos com IA</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Sugerir Projetos com IA</CardTitle>
           </CardHeader>
           <CardContent>
             <Button
               onClick={generateSuggestions}
               disabled={isGenerating || !contextHistory.trim() || !contextInitiatives.trim()}
-              className="w-full mb-4"
+              className="w-full mb-3 text-sm"
+              size="sm"
             >
               {isGenerating ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                   Gerando Sugestões...
                 </>
               ) : (
@@ -389,24 +387,24 @@ const StrategyPlatform = () => {
             </Button>
 
             {suggestedProjects.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="font-semibold">Projetos Sugeridos:</h4>
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Projetos Sugeridos:</h4>
                 {suggestedProjects.map((project) => (
-                  <div key={project.id} className="border rounded-md p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">{project.name}</span>
+                  <div key={project.id} className="border rounded-md p-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-sm">{project.name}</span>
                       <Checkbox
                         checked={project.selected}
                         onCheckedChange={() => handleProjectSelection(project.id)}
                       />
                     </div>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-xs text-gray-600">
                       Impacto: {project.impact} | Complexidade: {project.complexity}
                     </p>
-                    <p className="text-sm text-gray-700">{project.description}</p>
+                    <p className="text-xs text-gray-700">{project.description}</p>
                   </div>
                 ))}
-                <Button onClick={saveSuggestedProjects} className="w-full">
+                <Button onClick={saveSuggestedProjects} className="w-full text-sm" size="sm">
                   Adicionar Projetos Selecionados
                 </Button>
               </div>
@@ -416,34 +414,36 @@ const StrategyPlatform = () => {
 
         {/* Manual Project Addition */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plus className="w-5 h-5" />
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Plus className="w-4 h-4" />
               Adicionar Projeto
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="projectName">Nome</Label>
+          <CardContent className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="projectName" className="text-sm">Nome</Label>
               <Input
                 id="projectName"
                 value={newProject.name}
                 onChange={(e) => setNewProject({...newProject, name: e.target.value})}
                 placeholder="Nome do projeto"
+                className="text-sm"
               />
             </div>
-            <div>
-              <Label htmlFor="expectedReturn">Retorno Esperado</Label>
+            <div className="space-y-1">
+              <Label htmlFor="expectedReturn" className="text-sm">Retorno Esperado</Label>
               <Input
                 id="expectedReturn"
                 value={newProject.expectedReturn}
                 onChange={(e) => setNewProject({...newProject, expectedReturn: e.target.value})}
                 placeholder="Ex: 25% ROI em 12 meses"
+                className="text-sm"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="impact">Impacto (1-10)</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="impact" className="text-sm">Impacto (1-10)</Label>
                 <Input
                   id="impact"
                   type="number"
@@ -451,10 +451,11 @@ const StrategyPlatform = () => {
                   max="10"
                   value={newProject.impact}
                   onChange={(e) => setNewProject({...newProject, impact: parseInt(e.target.value) || 1})}
+                  className="text-sm"
                 />
               </div>
-              <div>
-                <Label htmlFor="complexity">Complexidade (1-10)</Label>
+              <div className="space-y-1">
+                <Label htmlFor="complexity" className="text-sm">Complexidade (1-10)</Label>
                 <Input
                   id="complexity"
                   type="number"
@@ -462,13 +463,14 @@ const StrategyPlatform = () => {
                   max="10"
                   value={newProject.complexity}
                   onChange={(e) => setNewProject({...newProject, complexity: parseInt(e.target.value) || 1})}
+                  className="text-sm"
                 />
               </div>
             </div>
-            <div>
-              <Label htmlFor="category">Categoria</Label>
+            <div className="space-y-1">
+              <Label htmlFor="category" className="text-sm">Categoria</Label>
               <Select value={newProject.category} onValueChange={(value: "Core" | "Adjacente" | "Transformacional") => setNewProject({...newProject, category: value})}>
-                <SelectTrigger>
+                <SelectTrigger className="text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -478,7 +480,7 @@ const StrategyPlatform = () => {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={addManualProject} className="w-full">
+            <Button onClick={addManualProject} className="w-full text-sm" size="sm">
               Adicionar Manualmente
             </Button>
           </CardContent>
@@ -486,34 +488,34 @@ const StrategyPlatform = () => {
 
         {/* Current Projects */}
         <Card>
-          <CardHeader>
-            <CardTitle>Projetos Atuais</CardTitle>
-            <CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Projetos Atuais</CardTitle>
+            <CardDescription className="text-sm">
               {currentProjects.length} projeto(s) no portfólio
             </CardDescription>
           </CardHeader>
           <CardContent>
             {currentProjects.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">
+              <p className="text-gray-500 text-center py-3 text-sm">
                 Nenhum projeto adicionado ainda
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {currentProjects.map((project) => (
-                  <div key={project.id} className="border rounded-md p-3">
-                    <div className="font-medium">{project.name}</div>
-                    <div className="text-sm text-gray-600">
+                  <div key={project.id} className="border rounded-md p-2">
+                    <div className="font-medium text-sm">{project.name}</div>
+                    <div className="text-xs text-gray-600">
                       {project.category} | Impacto: {project.impact} | Complexidade: {project.complexity}
                     </div>
                     {project.expectedReturn && (
-                      <div className="text-sm text-gray-700">
+                      <div className="text-xs text-gray-700">
                         Retorno: {project.expectedReturn}
                       </div>
                     )}
                   </div>
                 ))}
-                <Button onClick={generateReport} className="w-full mt-4">
-                  <FileText className="mr-2 h-4 w-4" />
+                <Button onClick={generateReport} className="w-full mt-3 text-sm" size="sm">
+                  <FileText className="mr-2 h-3 w-3" />
                   Gerar Relatório
                 </Button>
               </div>
