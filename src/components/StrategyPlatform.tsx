@@ -35,7 +35,7 @@ const StrategyPlatform = () => {
   const [portfolioName, setPortfolioName] = useState('');
   const [contextHistory, setContextHistory] = useState('');
   const [contextInitiatives, setContextInitiatives] = useState('');
-  
+
   const [newProject, setNewProject] = useState({
     name: '',
     expectedReturn: '',
