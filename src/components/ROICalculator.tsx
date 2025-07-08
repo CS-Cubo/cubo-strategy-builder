@@ -11,8 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
-import { Slider } from "@/components/ui/slider"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { TrendingUp, Search, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,33 +19,25 @@ import { useBenchmarkCache } from '@/hooks/useBenchmarkCache';
 import { useClickCounter } from '@/hooks/useClickCounter';
 import { useSession } from '@/hooks/useSession';
 
-interface CalculationResult {
-  roi: number | null;
-  netProfit: number | null;
-  breakEvenMonths: number | null;
-  monthlyReturn: number | null;
-  riskAdjustedRoi: number | null;
-}
-
 const ROICalculator = () => {
-  const [projectName, setProjectName] = useState('');
-  const [projectDescription, setProjectDescription] = useState('');
-  const [investmentAmount, setInvestmentAmount] = useState<number>(10000);
-  const [timeframe, setTimeframe] = useState<number>(12);
-  const [expectedRevenue, setExpectedRevenue] = useState<number>(15000);
-  const [expectedCosts, setExpectedCosts] = useState<number>(5000);
-  const [riskLevel, setRiskLevel] = useState('Médio');
-  const [calculationModel, setCalculationModel] = useState('Simples');
-  const [benchmarkData, setBenchmarkData] = useState<string | null>(null);
-  const [benchmarkLoading, setBenchmarkLoading] = useState(false);
-  const [roiResult, setRoiResult] = useState<CalculationResult>({
-    roi: null,
-    netProfit: null,
-    breakEvenMonths: null,
-    monthlyReturn: null,
-    riskAdjustedRoi: null,
-  });
-  const [isCalculating, setIsCalculating] = useState(false);
+  // Estados para Calculadora Simples
+  const [simpleProjectName, setSimpleProjectName] = useState('');
+  const [simpleContractValue, setSimpleContractValue] = useState<number>(0);
+  const [simpleProjectDescription, setSimpleProjectDescription] = useState('');
+  const [simpleExpectedROI, setSimpleExpectedROI] = useState<number>(0);
+  const [simpleBenchmarkData, setSimpleBenchmarkData] = useState<string | null>(null);
+  const [simpleBenchmarkLoading, setSimpleBenchmarkLoading] = useState(false);
+
+  // Estados para Calculadora Estratégica
+  const [strategicName, setStrategicName] = useState('');
+  const [strategicDescription, setStrategicDescription] = useState('');
+  const [strategicExpectedInvestment, setStrategicExpectedInvestment] = useState<number>(0);
+  const [strategicExpectedReturn, setStrategicExpectedReturn] = useState<number>(0);
+  const [strategicCashFlow, setStrategicCashFlow] = useState('');
+  const [strategicScenario, setStrategicScenario] = useState('');
+  const [strategicBenchmarkData, setStrategicBenchmarkData] = useState<string | null>(null);
+  const [strategicBenchmarkLoading, setStrategicBenchmarkLoading] = useState(false);
+
   const { toast } = useToast();
   const { sessionId } = useSession();
   const { getCachedData, setCachedData } = useBenchmarkCache();
@@ -54,131 +45,12 @@ const ROICalculator = () => {
 
   useEffect(() => {
     if (sessionId) {
-      // console.log("Session ID:", sessionId);
+      console.log("Session ID:", sessionId);
     }
   }, [sessionId]);
 
-  const calculateROI = async () => {
-    setIsCalculating(true);
-
-    // Validate inputs
-    if (!projectName.trim()) {
-      toast({
-        title: "Nome do projeto necessário",
-        description: "Por favor, insira o nome do projeto.",
-        variant: "destructive"
-      });
-      setIsCalculating(false);
-      return;
-    }
-
-    try {
-      let calculatedROI: number;
-      let calculatedNetProfit: number;
-      let calculatedBreakEvenMonths: number;
-      let calculatedMonthlyReturn: number;
-      let calculatedRiskAdjustedRoi: number;
-
-      // Perform calculations based on the selected model
-      if (calculationModel === 'Simples') {
-        calculatedNetProfit = expectedRevenue - expectedCosts - investmentAmount;
-        calculatedROI = ((calculatedNetProfit / investmentAmount) * 100);
-        calculatedBreakEvenMonths = investmentAmount / (calculatedNetProfit / timeframe);
-        calculatedMonthlyReturn = calculatedNetProfit / timeframe;
-        calculatedRiskAdjustedRoi = calculatedROI * getRiskAdjustmentFactor(riskLevel);
-      } else {
-        // Complex calculation logic here (can be expanded)
-        calculatedNetProfit = expectedRevenue - expectedCosts - investmentAmount;
-        calculatedROI = ((calculatedNetProfit / investmentAmount) * 100);
-        calculatedBreakEvenMonths = investmentAmount / (calculatedNetProfit / timeframe);
-        calculatedMonthlyReturn = calculatedNetProfit / timeframe;
-        calculatedRiskAdjustedRoi = calculatedROI * getRiskAdjustmentFactor(riskLevel);
-      }
-
-      setRoiResult({
-        roi: calculatedROI,
-        netProfit: calculatedNetProfit,
-        breakEvenMonths: calculatedBreakEvenMonths,
-        monthlyReturn: calculatedMonthlyReturn,
-        riskAdjustedRoi: calculatedRiskAdjustedRoi,
-      });
-
-      // Save to Supabase
-      if (sessionId) {
-        const { data, error } = await supabase
-          .from('roi_projects')
-          .insert([
-            {
-              session_id: sessionId,
-              project_name: projectName,
-              project_description: projectDescription,
-              investment_amount: investmentAmount,
-              timeframe: timeframe,
-              expected_revenue: expectedRevenue,
-              expected_costs: expectedCosts,
-              risk_level: riskLevel,
-              calculation_model: calculationModel,
-              roi_result: calculatedROI,
-              net_profit: calculatedNetProfit,
-              break_even_months: calculatedBreakEvenMonths,
-              monthly_return: calculatedMonthlyReturn,
-              risk_adjusted_roi: calculatedRiskAdjustedRoi,
-            },
-          ]);
-
-        if (error) {
-          console.error('Erro ao salvar no Supabase:', error);
-          toast({
-            title: "Erro",
-            description: "Erro ao salvar os resultados. Tente novamente.",
-            variant: "destructive"
-          });
-        } else {
-          toast({
-            title: "Resultados salvos!",
-            description: "Seus resultados foram salvos com sucesso.",
-          });
-        }
-      } else {
-        toast({
-          title: "Atenção",
-          description: "Resultados não estão sendo salvos. Insira um código de acesso.",
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao calcular o ROI:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao calcular o ROI. Tente novamente.",
-        variant: "destructive"
-      });
-      setRoiResult({
-        roi: null,
-        netProfit: null,
-        breakEvenMonths: null,
-        monthlyReturn: null,
-        riskAdjustedRoi: null,
-      });
-    } finally {
-      setIsCalculating(false);
-    }
-  };
-
-  const getRiskAdjustmentFactor = (risk: string): number => {
-    switch (risk) {
-      case 'Baixo':
-        return 1.2;
-      case 'Médio':
-        return 1.0;
-      case 'Alto':
-        return 0.8;
-      default:
-        return 1.0;
-    }
-  };
-
-  const fetchBenchmarkData = async () => {
-    if (!projectDescription.trim()) {
+  const fetchBenchmarkData = async (description: string, type: 'simple' | 'strategic') => {
+    if (!description.trim()) {
       toast({
         title: "Descrição necessária",
         description: "Por favor, forneça uma descrição do projeto para obter benchmarks.",
@@ -188,13 +60,21 @@ const ROICalculator = () => {
     }
 
     // Verificar cache primeiro
-    const cachedData = getCachedData(projectDescription);
+    const cachedData = getCachedData(description);
     if (cachedData) {
-      setBenchmarkData(cachedData);
+      if (type === 'simple') {
+        setSimpleBenchmarkData(cachedData);
+      } else {
+        setStrategicBenchmarkData(cachedData);
+      }
       return;
     }
 
-    setBenchmarkLoading(true);
+    if (type === 'simple') {
+      setSimpleBenchmarkLoading(true);
+    } else {
+      setStrategicBenchmarkLoading(true);
+    }
     
     try {
       // Incrementar contador de cliques
@@ -202,7 +82,7 @@ const ROICalculator = () => {
 
       const { data, error } = await supabase.functions.invoke('ai-benchmarks', {
         body: { 
-          description: projectDescription,
+          description: description,
           type: 'benchmark'
         }
       });
@@ -218,9 +98,13 @@ const ROICalculator = () => {
       }
 
       if (data?.text) {
-        setBenchmarkData(data.text);
+        if (type === 'simple') {
+          setSimpleBenchmarkData(data.text);
+        } else {
+          setStrategicBenchmarkData(data.text);
+        }
         // Salvar no cache
-        setCachedData(projectDescription, data.text);
+        setCachedData(description, data.text);
       } else {
         toast({
           title: "Erro",
@@ -236,233 +120,355 @@ const ROICalculator = () => {
         variant: "destructive"
       });
     } finally {
-      setBenchmarkLoading(false);
+      if (type === 'simple') {
+        setSimpleBenchmarkLoading(false);
+      } else {
+        setStrategicBenchmarkLoading(false);
+      }
+    }
+  };
+
+  const saveSimpleProject = async () => {
+    if (!sessionId) {
+      toast({
+        title: "Sessão inválida",
+        description: "Por favor, inicie uma sessão para salvar o projeto.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!simpleProjectName.trim()) {
+      toast({
+        title: "Nome necessário",
+        description: "Por favor, insira o nome do projeto.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('roi_projects')
+        .insert([
+          {
+            session_id: sessionId,
+            project_name: simpleProjectName,
+            project_description: simpleProjectDescription,
+            investment_amount: simpleContractValue,
+            expected_revenue: simpleExpectedROI,
+            risk_level: 'Baixo',
+            calculation_model: 'Simples'
+          }
+        ]);
+
+      if (error) {
+        console.error('Erro ao salvar projeto:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao salvar o projeto. Tente novamente.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Projeto salvo!",
+          description: "Seu projeto foi salvo com sucesso.",
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao salvar projeto:', error);
+      toast({
+        title: "Erro",
+        description: "Erro inesperado ao salvar projeto.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const saveStrategicProject = async () => {
+    if (!sessionId) {
+      toast({
+        title: "Sessão inválida",
+        description: "Por favor, inicie uma sessão para salvar o projeto.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!strategicName.trim()) {
+      toast({
+        title: "Nome necessário",
+        description: "Por favor, insira o nome do projeto.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('roi_projects')
+        .insert([
+          {
+            session_id: sessionId,
+            project_name: strategicName,
+            project_description: strategicDescription,
+            investment_amount: strategicExpectedInvestment,
+            expected_revenue: strategicExpectedReturn,
+            risk_level: 'Alto',
+            calculation_model: 'Estratégico'
+          }
+        ]);
+
+      if (error) {
+        console.error('Erro ao salvar projeto:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao salvar o projeto. Tente novamente.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Projeto salvo!",
+          description: "Seu projeto estratégico foi salvo com sucesso.",
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao salvar projeto:', error);
+      toast({
+        title: "Erro",
+        description: "Erro inesperado ao salvar projeto.",
+        variant: "destructive"
+      });
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Project Details Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Detalhes do Projeto</CardTitle>
-          <CardDescription>
-            Insira os detalhes do seu projeto para calcular o ROI.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="projectName">Nome do Projeto</Label>
-            <Input
-              id="projectName"
-              placeholder="Nome do projeto"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="projectDescription">Descrição do Projeto</Label>
-            <Textarea
-              id="projectDescription"
-              placeholder="Descreva seu projeto"
-              value={projectDescription}
-              onChange={(e) => setProjectDescription(e.target.value)}
-              className="mt-1"
-              rows={3}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Financial Inputs Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Entradas Financeiras</CardTitle>
-          <CardDescription>
-            Insira os dados financeiros para calcular o ROI.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="investmentAmount">Investimento Inicial</Label>
-            <Input
-              type="number"
-              id="investmentAmount"
-              placeholder="R$ 10.000"
-              value={investmentAmount}
-              onChange={(e) => setInvestmentAmount(Number(e.target.value))}
-            />
-          </div>
-          <div>
-            <Label htmlFor="timeframe">Timeframe (Meses)</Label>
-            <Slider
-              id="timeframe"
-              defaultValue={[12]}
-              max={60}
-              min={1}
-              step={1}
-              onValueChange={(value) => setTimeframe(value[0])}
-            />
-            <p className="text-sm text-muted-foreground mt-1">
-              {timeframe} meses
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="expectedRevenue">Receita Esperada</Label>
-            <Input
-              type="number"
-              id="expectedRevenue"
-              placeholder="R$ 15.000"
-              value={expectedRevenue}
-              onChange={(e) => setExpectedRevenue(Number(e.target.value))}
-            />
-          </div>
-          <div>
-            <Label htmlFor="expectedCosts">Custos Esperados</Label>
-            <Input
-              type="number"
-              id="expectedCosts"
-              placeholder="R$ 5.000"
-              value={expectedCosts}
-              onChange={(e) => setExpectedCosts(Number(e.target.value))}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Risk and Model Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Risco e Modelo</CardTitle>
-          <CardDescription>
-            Selecione o nível de risco e o modelo de cálculo.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="riskLevel">Nível de Risco</Label>
-            <Select onValueChange={setRiskLevel}>
-              <SelectTrigger id="riskLevel">
-                <SelectValue placeholder="Médio" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Baixo">Baixo</SelectItem>
-                <SelectItem value="Médio">Médio</SelectItem>
-                <SelectItem value="Alto">Alto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="calculationModel">Modelo de Cálculo</Label>
-            <Select onValueChange={setCalculationModel}>
-              <SelectTrigger id="calculationModel">
-                <SelectValue placeholder="Simples" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Simples">Simples</SelectItem>
-                {/* <SelectItem value="Complexo">Complexo</SelectItem> */}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={calculateROI} disabled={isCalculating} className="w-full">
-            {isCalculating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Calculando...
-              </>
-            ) : (
-              "Calcular ROI"
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Benchmark Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Benchmarks de Mercado
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="projectDescription">Descrição do Projeto</Label>
-            <Textarea
-              id="projectDescription"
-              placeholder="Descreva seu projeto para obter benchmarks específicos do mercado..."
-              value={projectDescription}
-              onChange={(e) => setProjectDescription(e.target.value)}
-              className="mt-1"
-              rows={3}
-            />
-          </div>
-          
-          <Button 
-            onClick={fetchBenchmarkData}
-            disabled={benchmarkLoading || !projectDescription.trim()}
-            className="w-full"
-          >
-            {benchmarkLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Analisando...
-              </>
-            ) : (
-              <>
-                <Search className="mr-2 h-4 w-4" />
-                Obter Benchmarks do Mercado
-              </>
-            )}
-          </Button>
-
-          {benchmarkData && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <h4 className="font-semibold mb-2 text-gray-900">Análise de Benchmarks:</h4>
-              <div 
-                className="text-gray-800 whitespace-pre-wrap text-sm leading-relaxed"
-                dangerouslySetInnerHTML={{ 
-                  __html: benchmarkData.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                }}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Results Section */}
-      {roiResult.roi !== null && (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Calculadora ROI - Lado Esquerdo */}
+      <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Resultados</CardTitle>
+            <CardTitle>Calculadora de ROI</CardTitle>
             <CardDescription>
-              Aqui estão os resultados do seu cálculo de ROI.
+              Escolha entre cálculo simples ou estratégico para avaliar o retorno do seu investimento.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>ROI</Label>
-              <Input value={`${roiResult.roi?.toFixed(2)}%`} readOnly />
-            </div>
-            <div>
-              <Label>Lucro Líquido</Label>
-              <Input value={`R$ ${roiResult.netProfit?.toFixed(2)}`} readOnly />
-            </div>
-            <div>
-              <Label>Meses para Break-Even</Label>
-              <Input value={roiResult.breakEvenMonths?.toFixed(2)} readOnly />
-            </div>
-            <div>
-              <Label>Retorno Mensal</Label>
-              <Input value={`R$ ${roiResult.monthlyReturn?.toFixed(2)}`} readOnly />
-            </div>
-            <div>
-              <Label>ROI Ajustado ao Risco</Label>
-              <Input value={`${roiResult.riskAdjustedRoi?.toFixed(2)}%`} readOnly />
-            </div>
+          <CardContent>
+            <Tabs defaultValue="simple" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="simple">Simples</TabsTrigger>
+                <TabsTrigger value="strategic">Estratégico</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="simple" className="space-y-4">
+                <div>
+                  <Label htmlFor="simpleProjectName">Nome do Projeto</Label>
+                  <Input
+                    id="simpleProjectName"
+                    placeholder="Nome do projeto"
+                    value={simpleProjectName}
+                    onChange={(e) => setSimpleProjectName(e.target.value)}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="simpleContractValue">Valor do Contrato</Label>
+                  <Input
+                    type="number"
+                    id="simpleContractValue"
+                    placeholder="R$ 10.000"
+                    value={simpleContractValue}
+                    onChange={(e) => setSimpleContractValue(Number(e.target.value))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="simpleProjectDescription">Descrição do Projeto</Label>
+                  <Textarea
+                    id="simpleProjectDescription"
+                    placeholder="Descreva seu projeto"
+                    value={simpleProjectDescription}
+                    onChange={(e) => setSimpleProjectDescription(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                <Button 
+                  onClick={() => fetchBenchmarkData(simpleProjectDescription, 'simple')}
+                  disabled={simpleBenchmarkLoading || !simpleProjectDescription.trim()}
+                  className="w-full"
+                >
+                  {simpleBenchmarkLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Analisando...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="mr-2 h-4 w-4" />
+                      Obter Benchmarks do Mercado
+                    </>
+                  )}
+                </Button>
+
+                {simpleBenchmarkData && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold mb-2 text-gray-900">Análise de Benchmarks:</h4>
+                    <div 
+                      className="text-gray-800 whitespace-pre-wrap text-sm leading-relaxed"
+                      dangerouslySetInnerHTML={{ 
+                        __html: simpleBenchmarkData.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                      }}
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <Label htmlFor="simpleExpectedROI">ROI Esperado (%)</Label>
+                  <Input
+                    type="number"
+                    id="simpleExpectedROI"
+                    placeholder="15"
+                    value={simpleExpectedROI}
+                    onChange={(e) => setSimpleExpectedROI(Number(e.target.value))}
+                  />
+                </div>
+                
+                <Button onClick={saveSimpleProject} className="w-full">
+                  Salvar Projeto Simples
+                </Button>
+              </TabsContent>
+              
+              <TabsContent value="strategic" className="space-y-4">
+                <div>
+                  <Label htmlFor="strategicName">Nome</Label>
+                  <Input
+                    id="strategicName"
+                    placeholder="Nome do projeto estratégico"
+                    value={strategicName}
+                    onChange={(e) => setStrategicName(e.target.value)}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="strategicDescription">Descrição</Label>
+                  <Textarea
+                    id="strategicDescription"
+                    placeholder="Descrição detalhada do projeto estratégico"
+                    value={strategicDescription}
+                    onChange={(e) => setStrategicDescription(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                <Button 
+                  onClick={() => fetchBenchmarkData(strategicDescription, 'strategic')}
+                  disabled={strategicBenchmarkLoading || !strategicDescription.trim()}
+                  className="w-full"
+                >
+                  {strategicBenchmarkLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Analisando...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="mr-2 h-4 w-4" />
+                      Obter Benchmarks do Mercado
+                    </>
+                  )}
+                </Button>
+
+                {strategicBenchmarkData && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold mb-2 text-gray-900">Análise de Benchmarks:</h4>
+                    <div 
+                      className="text-gray-800 whitespace-pre-wrap text-sm leading-relaxed"
+                      dangerouslySetInnerHTML={{ 
+                        __html: strategicBenchmarkData.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                      }}
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <Label htmlFor="strategicExpectedInvestment">Investimento Esperado</Label>
+                  <Input
+                    type="number"
+                    id="strategicExpectedInvestment"
+                    placeholder="R$ 100.000"
+                    value={strategicExpectedInvestment}
+                    onChange={(e) => setStrategicExpectedInvestment(Number(e.target.value))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="strategicExpectedReturn">Retorno Esperado</Label>
+                  <Input
+                    type="number"
+                    id="strategicExpectedReturn"
+                    placeholder="R$ 150.000"
+                    value={strategicExpectedReturn}
+                    onChange={(e) => setStrategicExpectedReturn(Number(e.target.value))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="strategicCashFlow">Fluxos de Caixa</Label>
+                  <Textarea
+                    id="strategicCashFlow"
+                    placeholder="Descrição dos fluxos de caixa esperados"
+                    value={strategicCashFlow}
+                    onChange={(e) => setStrategicCashFlow(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="strategicScenario">Cenário</Label>
+                  <Textarea
+                    id="strategicScenario"
+                    placeholder="Descrição do cenário de investimento"
+                    value={strategicScenario}
+                    onChange={(e) => setStrategicScenario(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                
+                <Button onClick={saveStrategicProject} className="w-full">
+                  Salvar Projeto Estratégico
+                </Button>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
-      )}
+      </div>
+
+      {/* Projetos Salvos - Lado Direito */}
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5" />
+              Projetos Salvos
+            </CardTitle>
+            <CardDescription>
+              Aqui aparecerão seus projetos salvos quando você tiver uma sessão ativa.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!sessionId ? (
+              <p className="text-gray-600 text-center py-8">
+                Insira um código de acesso no header para ver seus projetos salvos.
+              </p>
+            ) : (
+              <p className="text-gray-600 text-center py-8">
+                Seus projetos salvos aparecerão aqui automaticamente.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
