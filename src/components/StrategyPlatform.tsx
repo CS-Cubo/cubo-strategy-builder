@@ -1,111 +1,87 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { toast } from "@/hooks/use-toast"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Lightbulb, Plus, FileText } from "lucide-react"
-import { supabase } from '@/integrations/supabase/client';
-import { Tables } from '@/integrations/supabase/types';
-import { useClickCounter } from '@/hooks/useClickCounter';
-import { useSession } from '@/hooks/useSession';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import PortfolioChart from './PortfolioChart';
+  ResponsiveContainer,
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts';
 
 interface Project {
-  id: string;
+  id: number;
   name: string;
   impact: number;
   complexity: number;
   category: "Core" | "Adjacente" | "Transformacional";
   selected: boolean;
-  description?: string;
-  expectedReturn?: string;
 }
 
-const StrategyPlatform = () => {
-  const [portfolioName, setPortfolioName] = useState('');
-  const [contextHistory, setContextHistory] = useState('');
-  const [contextInitiatives, setContextInitiatives] = useState('');
+interface PortfolioChartProps {
+  projects: Project[];
+}
 
-  const [newProject, setNewProject] = useState({
-    name: '',
-    expectedReturn: '',
-    impact: 1,
-    complexity: 1,
-    category: 'Core' as "Core" | "Adjacente" | "Transformacional"
-  });
+const COLORS: Record<string, string> = {
+  Core: '#2563eb',
+  Adjacente: '#f59e0b',
+  Transformacional: '#10b981'
+};
 
-  const [suggestedProjects, setSuggestedProjects] = useState<Project[]>([]);
-  const [currentProjects, setCurrentProjects] = useState<Project[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const { sessionId } = useSession();
-  const { incrementProjectSuggestionsClicks } = useClickCounter(sessionId);
+const PortfolioChart: React.FC<PortfolioChartProps> = ({ projects }) => {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 40 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis
+          type="number"
+          dataKey="complexity"
+          name="Complexidade"
+          domain={[1, 10]}
+          tick={{ fontSize: 12 }}
+          label={{
+            value: 'Complexidade',
+            position: 'bottom',
+            offset: 0,
+            style: { fontSize: 12 }
+          }}
+        />
+        <YAxis
+          type="number"
+          dataKey="impact"
+          name="Impacto"
+          domain={[1, 10]}
+          tick={{ fontSize: 12 }}
+          label={{
+            value: 'Impacto',
+            angle: -90,
+            position: 'left',
+            offset: 0,
+            style: { fontSize: 12 }
+          }}
+        />
+        <Tooltip
+          cursor={{ strokeDasharray: '3 3' }}
+          contentStyle={{ fontSize: 12 }}
+          labelStyle={{ fontSize: 12 }}
+          itemStyle={{ fontSize: 12 }}
+        />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        {['Core', 'Adjacente', 'Transformacional'].map(category => (
+          <Scatter
+            key={category}
+            name={category}
+            data={projects.filter(p => p.category === category)}
+            fill={COLORS[category]}
+          />
+        ))}
+      </ScatterChart>
+    </ResponsiveContainer>
+  );
+};
 
-  useEffect(() => {
-    if (sessionId) {
-      loadExistingData();
-    }
-  }, [sessionId]);
-
-  const loadExistingData = async () => {
-    if (!sessionId) return;
-
-    try {
-      const { data: sessions, error: sessionError } = await supabase
-        .from('strategy_sessions')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (sessionError) {
-        console.error('Error loading strategy sessions:', sessionError);
-        return;
-      }
-
-      if (sessions && sessions.length > 0) {
-        const session = sessions[0];
-        setPortfolioName(session.portfolio_name || '');
-        setContextHistory(session.context_history || '');
-        setContextInitiatives(session.context_initiatives || '');
-
-        const { data: projects, error: projectsError } = await supabase
-          .from('strategy_projects')
-          .select('*')
-          .eq('strategy_session_id', session.id);
-
-        if (projectsError) {
-          console.error('Error loading projects:', projectsError);
-          return;
-        }
-
-        if (projects) {
-          const mappedProjects = projects.map(p => ({
-            id: p.id,
-            name: p.name,
-            impact: p.impact,
-            complexity: p.complexity,
-            category: p.category as "Core" | "Adjacente" | "Transformacional",
-            selected: p.selected,
-            description: p.description || '',
-            expectedReturn: p.expected_return || ''
-          }));
-          setCurrentProjects(mappedProjects);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading existing data:', error);
-    }
-  };
+export default PortfolioChart;
 
   const handleProjectSelection = (id: string) => {
     setSuggestedProjects(
