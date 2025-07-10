@@ -13,11 +13,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { TrendingUp, Search, Loader2 } from 'lucide-react';
+import { TrendingUp, Search, Loader2, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useBenchmarkCache } from '@/hooks/useBenchmarkCache';
 import { useClickCounter } from '@/hooks/useClickCounter';
 import { useSession } from '@/hooks/useSession';
+import { useROIStorage } from '@/hooks/useROIStorage';
 
 const ROICalculator = () => {
   // Estados para Calculadora Simples
@@ -42,6 +43,7 @@ const ROICalculator = () => {
   const { sessionId } = useSession();
   const { getCachedData, setCachedData } = useBenchmarkCache();
   const { incrementBenchmarkClicks } = useClickCounter(sessionId);
+  const { projects, isLoading, saveProject, deleteProject } = useROIStorage(sessionId);
 
   useEffect(() => {
     if (sessionId) {
@@ -147,41 +149,23 @@ const ROICalculator = () => {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('roi_projects')
-        .insert([
-          {
-            session_id: sessionId,
-            project_name: simpleProjectName,
-            project_description: simpleProjectDescription,
-            investment_amount: simpleContractValue,
-            expected_revenue: simpleExpectedROI,
-            risk_level: 'Baixo',
-            calculation_model: 'Simples'
-          }
-        ]);
+    const projectData = {
+      project_name: simpleProjectName,
+      project_description: simpleProjectDescription,
+      investment_amount: simpleContractValue,
+      expected_revenue: simpleExpectedROI,
+      risk_level: 'Baixo',
+      calculation_model: 'Simples'
+    };
 
-      if (error) {
-        console.error('Erro ao salvar projeto:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao salvar o projeto. Tente novamente.",
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Projeto salvo!",
-          description: "Seu projeto foi salvo com sucesso.",
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao salvar projeto:', error);
-      toast({
-        title: "Erro",
-        description: "Erro inesperado ao salvar projeto.",
-        variant: "destructive"
-      });
+    const result = await saveProject(projectData);
+    if (result) {
+      // Limpar formulário após salvar
+      setSimpleProjectName('');
+      setSimpleContractValue(0);
+      setSimpleProjectDescription('');
+      setSimpleExpectedROI(0);
+      setSimpleBenchmarkData(null);
     }
   };
 
@@ -204,42 +188,118 @@ const ROICalculator = () => {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('roi_projects')
-        .insert([
-          {
-            session_id: sessionId,
-            project_name: strategicName,
-            project_description: strategicDescription,
-            investment_amount: strategicExpectedInvestment,
-            expected_revenue: strategicExpectedReturn,
-            risk_level: 'Alto',
-            calculation_model: 'Estratégico'
-          }
-        ]);
+    const projectData = {
+      project_name: strategicName,
+      project_description: strategicDescription,
+      investment_amount: strategicExpectedInvestment,
+      expected_revenue: strategicExpectedReturn,
+      risk_level: 'Alto',
+      calculation_model: 'Estratégico'
+    };
 
-      if (error) {
-        console.error('Erro ao salvar projeto:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao salvar o projeto. Tente novamente.",
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Projeto salvo!",
-          description: "Seu projeto estratégico foi salvo com sucesso.",
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao salvar projeto:', error);
+    const result = await saveProject(projectData);
+    if (result) {
+      // Limpar formulário após salvar
+      setStrategicName('');
+      setStrategicDescription('');
+      setStrategicExpectedInvestment(0);
+      setStrategicExpectedReturn(0);
+      setStrategicCashFlow('');
+      setStrategicScenario('');
+      setStrategicBenchmarkData(null);
+    }
+  };
+
+  const generateReport = () => {
+    if (!projects.length) {
       toast({
-        title: "Erro",
-        description: "Erro inesperado ao salvar projeto.",
+        title: "Nenhum projeto",
+        description: "Adicione pelo menos um projeto para gerar o relatório.",
         variant: "destructive"
       });
+      return;
     }
+
+    const reportWindow = window.open('', '_blank');
+    if (!reportWindow) return;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Relatório de ROI - Projetos</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+              margin: 2rem; 
+              color: #1f2937; 
+              line-height: 1.6;
+            }
+            .header { 
+              text-align: center; 
+              border-bottom: 2px solid #22c55e; 
+              padding-bottom: 1rem; 
+              margin-bottom: 2rem; 
+            }
+            .projects-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-top: 1rem; 
+            }
+            .projects-table th, .projects-table td { 
+              border: 1px solid #e5e7eb; 
+              padding: 0.75rem; 
+              text-align: left; 
+            }
+            .projects-table th { 
+              background: #f9fafb; 
+              font-weight: bold; 
+            }
+            @media print { 
+              body { margin: 0; } 
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Relatório de ROI - Projetos</h1>
+            <p>Gerado em: ${new Date().toLocaleDateString('pt-BR')}</p>
+          </div>
+          
+          <h2>Projetos Analisados (${projects.length})</h2>
+          <table class="projects-table">
+            <thead>
+              <tr>
+                <th>Nome do Projeto</th>
+                <th>Tipo</th>
+                <th>Investimento</th>
+                <th>Retorno Esperado</th>
+                <th>Nível de Risco</th>
+                <th>Descrição</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${projects.map(project => `
+                <tr>
+                  <td>${project.project_name}</td>
+                  <td>${project.calculation_model}</td>
+                  <td>R$ ${project.investment_amount.toLocaleString('pt-BR')}</td>
+                  <td>R$ ${(project.expected_revenue || 0).toLocaleString('pt-BR')}</td>
+                  <td>${project.risk_level}</td>
+                  <td>${project.project_description || 'N/A'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    reportWindow.document.write(html);
+    reportWindow.document.close();
+    setTimeout(() => {
+      reportWindow.print();
+    }, 500);
   };
 
   return (
@@ -450,10 +510,13 @@ const ROICalculator = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5" />
-              Projetos Salvos
+              Projetos Salvos ({projects.length})
             </CardTitle>
             <CardDescription>
-              Aqui aparecerão seus projetos salvos quando você tiver uma sessão ativa.
+              {!sessionId 
+                ? "Insira um código de acesso no header para ver seus projetos salvos."
+                : "Seus projetos ROI salvos aparecerão aqui automaticamente."
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -461,10 +524,54 @@ const ROICalculator = () => {
               <p className="text-gray-600 text-center py-8">
                 Insira um código de acesso no header para ver seus projetos salvos.
               </p>
-            ) : (
+            ) : isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span>Carregando projetos...</span>
+              </div>
+            ) : projects.length === 0 ? (
               <p className="text-gray-600 text-center py-8">
-                Seus projetos salvos aparecerão aqui automaticamente.
+                Nenhum projeto salvo ainda. Adicione um projeto usando a calculadora ao lado.
               </p>
+            ) : (
+              <div className="space-y-4">
+                {projects.map((project) => (
+                  <div key={project.id} className="border rounded-lg p-4 bg-gray-50">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-semibold text-lg">{project.project_name}</h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => project.id && deleteProject(project.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="font-medium">Tipo:</span> {project.calculation_model}
+                      </div>
+                      <div>
+                        <span className="font-medium">Risco:</span> {project.risk_level}
+                      </div>
+                      <div>
+                        <span className="font-medium">Investimento:</span> R$ {project.investment_amount.toLocaleString('pt-BR')}
+                      </div>
+                      <div>
+                        <span className="font-medium">Retorno:</span> R$ {(project.expected_revenue || 0).toLocaleString('pt-BR')}
+                      </div>
+                    </div>
+                    {project.project_description && (
+                      <p className="text-gray-600 text-sm mt-2">{project.project_description}</p>
+                    )}
+                  </div>
+                ))}
+                
+                <Button onClick={generateReport} className="w-full mt-4">
+                  Gerar Relatório
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
