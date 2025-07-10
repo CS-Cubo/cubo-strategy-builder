@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Download, Lightbulb, Plus } from "lucide-react";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
+import { Trash2, Download, Lightbulb, Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +40,10 @@ const StrategyPlatform = () => {
   const [contextInitiatives, setContextInitiatives] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [strategySessionId, setStrategySessionId] = useState<string | null>(null);
+  const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [benchmarkResults, setBenchmarkResults] = useState<string>("");
+  const [suggestedProjects, setSuggestedProjects] = useState<any[]>([]);
   
   // New project form
   const [newProject, setNewProject] = useState({
@@ -157,6 +161,141 @@ const StrategyPlatform = () => {
     }
   };
 
+  const fetchBenchmarks = async () => {
+    if (!contextHistory.trim()) {
+      toast({
+        title: "Erro",
+        description: "Adicione o histórico e contexto antes de buscar benchmarks",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoadingBenchmarks(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-benchmarks', {
+        body: {
+          description: contextHistory,
+          type: 'benchmark'
+        }
+      });
+
+      if (error) throw error;
+
+      setBenchmarkResults(data.text || "Não foi possível obter benchmarks no momento.");
+      
+      toast({
+        title: "Benchmarks obtidos!",
+        description: "Confira os resultados na gaveta lateral"
+      });
+    } catch (error) {
+      console.error('Error fetching benchmarks:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao buscar benchmarks",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingBenchmarks(false);
+    }
+  };
+
+  const suggestProjects = async () => {
+    if (!contextHistory.trim() || !contextInitiatives.trim()) {
+      toast({
+        title: "Erro",
+        description: "Preencha o histórico e as iniciativas antes de sugerir projetos",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    try {
+      const combinedContext = `Histórico: ${contextHistory}\n\nIniciativas: ${contextInitiatives}`;
+      
+      const { data, error } = await supabase.functions.invoke('ai-benchmarks', {
+        body: {
+          description: combinedContext,
+          type: 'suggestions'
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.projects && Array.isArray(data.projects)) {
+        setSuggestedProjects(data.projects);
+        toast({
+          title: "Projetos sugeridos!",
+          description: `${data.projects.length} projetos foram sugeridos pela IA`
+        });
+      } else {
+        throw new Error("Formato de resposta inválido");
+      }
+    } catch (error) {
+      console.error('Error suggesting projects:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao sugerir projetos",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const addSuggestedProject = async (suggestedProject: any) => {
+    if (!strategySessionId) {
+      toast({
+        title: "Erro",
+        description: "Salve a configuração do portfolio primeiro",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('strategy_projects')
+        .insert({
+          strategy_session_id: strategySessionId,
+          name: suggestedProject.name,
+          expected_return: suggestedProject.expectedReturn || "",
+          impact: suggestedProject.impact,
+          complexity: suggestedProject.complexity,
+          category: suggestedProject.category,
+          description: suggestedProject.description || ""
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setProjects([...projects, {
+        id: data.id,
+        name: data.name,
+        expected_return: data.expected_return || "",
+        impact: data.impact,
+        complexity: data.complexity,
+        category: data.category,
+        description: data.description || "",
+        selected: data.selected
+      }]);
+
+      toast({
+        title: "Sucesso",
+        description: "Projeto adicionado!"
+      });
+    } catch (error) {
+      console.error('Error adding suggested project:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao adicionar projeto",
+        variant: "destructive"
+      });
+    }
+  };
+
   const addProject = async () => {
     if (!strategySessionId || !newProject.name.trim() || !newProject.category) {
       toast({
@@ -248,12 +387,12 @@ const StrategyPlatform = () => {
       'Core': { bg: '#dbeafe', text: '#1e40af', class: 'category-core' },
       'Adjacente': { bg: '#e9d5ff', text: '#581c87', class: 'category-adjacente' },
       'Transformacional': { bg: '#fce7f3', text: '#831843', class: 'category-transformacional' },
-      'Tecnologia': { bg: '#dbeafe', text: '#1e40af', class: 'category-core' },
-      'Marketing': { bg: '#e9d5ff', text: '#581c87', class: 'category-adjacente' },
-      'Operações': { bg: '#fce7f3', text: '#831843', class: 'category-transformacional' },
-      'Vendas': { bg: '#dbeafe', text: '#1e40af', class: 'category-core' },
-      'RH': { bg: '#e9d5ff', text: '#581c87', class: 'category-adjacente' },
-      'Outro': { bg: '#fce7f3', text: '#831843', class: 'category-transformacional' }
+      'Tecnologia': { bg: '#8B5CF6', text: '#fff', class: 'category-tecnologia' },
+      'Marketing': { bg: '#EF4444', text: '#fff', class: 'category-marketing' },
+      'Operações': { bg: '#10B981', text: '#fff', class: 'category-operacoes' },
+      'Vendas': { bg: '#F59E0B', text: '#fff', class: 'category-vendas' },
+      'RH': { bg: '#3B82F6', text: '#fff', class: 'category-rh' },
+      'Outro': { bg: '#6B7280', text: '#fff', class: 'category-outro' }
     };
     return colors[category as keyof typeof colors] || colors['Outro'];
   };
@@ -262,9 +401,9 @@ const StrategyPlatform = () => {
     const svgPoints = projects.map(project => {
       const x = (project.complexity / 10) * 90 + 5;
       const y = 95 - (project.impact / 10) * 90;
-      const color = getCategoryColors(project.category);
+      const colorInfo = getCategoryColors(project.category);
       
-      return `<circle cx="${x}%" cy="${y}%" r="8" fill="${color.bg}" opacity="0.8" stroke="#fff" stroke-width="2">
+      return `<circle cx="${x}%" cy="${y}%" r="8" fill="${colorInfo.bg}" opacity="0.8" stroke="#fff" stroke-width="2">
         <title>${project.name}</title>
       </circle>`;
     }).join('\n');
@@ -390,6 +529,12 @@ const StrategyPlatform = () => {
             .category-core { background-color: #dbeafe; color: #1e40af; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
             .category-adjacente { background-color: #e9d5ff; color: #581c87; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
             .category-transformacional { background-color: #fce7f3; color: #831843; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-tecnologia { background-color: #8B5CF6; color: #fff; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-marketing { background-color: #EF4444; color: #fff; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-operacoes { background-color: #10B981; color: #fff; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-vendas { background-color: #F59E0B; color: #fff; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-rh { background-color: #3B82F6; color: #fff; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-outro { background-color: #6B7280; color: #fff; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
             .legend {
               display: flex;
               gap: 2rem;
@@ -474,16 +619,28 @@ const StrategyPlatform = () => {
               ${generateChartSVG()}
               <div class="legend">
                 <div class="legend-item">
-                  <div class="legend-dot" style="background-color: #3b82f6;"></div>
-                  <span>Core</span>
+                  <div class="legend-dot" style="background-color: #8B5CF6;"></div>
+                  <span>Tecnologia</span>
                 </div>
                 <div class="legend-item">
-                  <div class="legend-dot" style="background-color: #8b5cf6;"></div>
-                  <span>Adjacente</span>
+                  <div class="legend-dot" style="background-color: #EF4444;"></div>
+                  <span>Marketing</span>
                 </div>
                 <div class="legend-item">
-                  <div class="legend-dot" style="background-color: #ec4899;"></div>
-                  <span>Transformacional</span>
+                  <div class="legend-dot" style="background-color: #10B981;"></div>
+                  <span>Operações</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #F59E0B;"></div>
+                  <span>Vendas</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #3B82F6;"></div>
+                  <span>RH</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #6B7280;"></div>
+                  <span>Outro</span>
                 </div>
               </div>
             </div>
@@ -599,10 +756,93 @@ const StrategyPlatform = () => {
         {/* Right Column - Projects and Chart */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex gap-4">
-            <Button variant="outline" className="flex-1">
-              <Lightbulb className="w-4 h-4 mr-2" />
-              Sugerir Projetos com IA
-            </Button>
+            <Drawer>
+              <DrawerTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={suggestProjects}
+                  disabled={isLoadingSuggestions}
+                >
+                  {isLoadingSuggestions ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Lightbulb className="w-4 h-4 mr-2" />
+                  )}
+                  Sugerir Projetos com IA
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent>
+                <DrawerHeader>
+                  <DrawerTitle>Projetos Sugeridos pela IA</DrawerTitle>
+                </DrawerHeader>
+                <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
+                  {suggestedProjects.length === 0 ? (
+                    <p className="text-gray-500 text-center">Nenhum projeto sugerido ainda. Clique no botão para obter sugestões.</p>
+                  ) : (
+                    suggestedProjects.map((project, index) => (
+                      <Card key={index}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-2">
+                              <h4 className="font-medium">{project.name}</h4>
+                              <div className="flex gap-2 text-sm text-gray-600">
+                                <Badge variant="outline">{project.category}</Badge>
+                                <span>Impacto: {project.impact}</span>
+                                <span>Complexidade: {project.complexity}</span>
+                              </div>
+                              <p className="text-sm text-gray-600">{project.description}</p>
+                              {project.expectedReturn && (
+                                <p className="text-sm text-blue-600">Retorno: {project.expectedReturn}</p>
+                              )}
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => addSuggestedProject(project)}
+                            >
+                              <Plus className="w-4 h-4 mr-1" />
+                              Adicionar
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </DrawerContent>
+            </Drawer>
+
+            <Drawer>
+              <DrawerTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={fetchBenchmarks}
+                  disabled={isLoadingBenchmarks}
+                >
+                  {isLoadingBenchmarks ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Lightbulb className="w-4 h-4 mr-2" />
+                  )}
+                  Buscar Benchmarks
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent>
+                <DrawerHeader>
+                  <DrawerTitle>Benchmarks de Mercado</DrawerTitle>
+                </DrawerHeader>
+                <div className="p-4 max-h-96 overflow-y-auto">
+                  {benchmarkResults ? (
+                    <div className="prose prose-sm max-w-none">
+                      <pre className="whitespace-pre-wrap text-sm">{benchmarkResults}</pre>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center">Nenhum benchmark disponível ainda. Clique no botão para buscar.</p>
+                  )}
+                </div>
+              </DrawerContent>
+            </Drawer>
           </div>
 
           <Tabs defaultValue="add" className="w-full">
