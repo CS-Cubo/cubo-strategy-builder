@@ -243,55 +243,291 @@ const StrategyPlatform = () => {
     }
   };
 
+  const getCategoryColors = (category: string) => {
+    const colors = {
+      'Core': { bg: '#dbeafe', text: '#1e40af', class: 'category-core' },
+      'Adjacente': { bg: '#e9d5ff', text: '#581c87', class: 'category-adjacente' },
+      'Transformacional': { bg: '#fce7f3', text: '#831843', class: 'category-transformacional' },
+      'Tecnologia': { bg: '#dbeafe', text: '#1e40af', class: 'category-core' },
+      'Marketing': { bg: '#e9d5ff', text: '#581c87', class: 'category-adjacente' },
+      'Operações': { bg: '#fce7f3', text: '#831843', class: 'category-transformacional' },
+      'Vendas': { bg: '#dbeafe', text: '#1e40af', class: 'category-core' },
+      'RH': { bg: '#e9d5ff', text: '#581c87', class: 'category-adjacente' },
+      'Outro': { bg: '#fce7f3', text: '#831843', class: 'category-transformacional' }
+    };
+    return colors[category as keyof typeof colors] || colors['Outro'];
+  };
+
+  const generateChartSVG = () => {
+    const svgPoints = projects.map(project => {
+      const x = (project.complexity / 10) * 90 + 5;
+      const y = 95 - (project.impact / 10) * 90;
+      const color = getCategoryColors(project.category);
+      
+      return `<circle cx="${x}%" cy="${y}%" r="8" fill="${color.bg}" opacity="0.8" stroke="#fff" stroke-width="2">
+        <title>${project.name}</title>
+      </circle>`;
+    }).join('\n');
+
+    return `<svg width="100%" height="400px" viewBox="0 0 100 100" preserveAspectRatio="none" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 2px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+      ${Array.from({length: 9}, (_, i) => 
+        `<line x1="${(i + 1) * 10}%" y1="0" x2="${(i + 1) * 10}%" y2="100" stroke="#e5e7eb" stroke-width="1"></line><line x1="0" y1="${(i + 1) * 10}%" x2="100" y2="${(i + 1) * 10}%" stroke="#e5e7eb" stroke-width="1"></line>`
+      ).join('')}
+      <text x="-45" y="8" style="font-size: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #64748b; font-weight: 600;" transform="rotate(-90)">IMPACTO</text>
+      <text x="45" y="108" style="font-size: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #64748b; font-weight: 600;">COMPLEXIDADE</text>
+      
+      <g class="chart-group">
+        ${svgPoints}
+      </g>
+    </svg>`;
+  };
+
   const generateReport = () => {
-    const reportContent = `
-RELATÓRIO DE PORTFOLIO ESTRATÉGICO
+    const avgImpact = projects.length > 0 ? (projects.reduce((sum, p) => sum + p.impact, 0) / projects.length).toFixed(1) : '0';
+    const avgComplexity = projects.length > 0 ? (projects.reduce((sum, p) => sum + p.complexity, 0) / projects.length).toFixed(1) : '0';
+    const highImpact = projects.filter(p => p.impact >= 8).length;
+    const lowComplexity = projects.filter(p => p.complexity <= 4).length;
+    const withReturn = projects.filter(p => p.expected_return && p.expected_return.trim()).length;
+    
+    const categoryCounts = projects.reduce((acc, p) => {
+      acc[p.category] = (acc[p.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
 
-Portfolio: ${portfolioName}
-
-CONTEXTO:
-Histórico: ${contextHistory}
-Iniciativas: ${contextInitiatives}
-
-PROJETOS (${projects.length}):
-${projects.map(p => `
-- ${p.name}
-  Categoria: ${p.category}
-  Impacto: ${p.impact}/10
-  Complexidade: ${p.complexity}/10
-  Retorno Esperado: ${p.expected_return}
-  ${p.description ? `Descrição: ${p.description}` : ''}
-`).join('')}
-
-ANÁLISE:
-- Total de projetos: ${projects.length}
-- Projetos por categoria: ${Object.entries(
-  projects.reduce((acc, p) => {
-    acc[p.category] = (acc[p.category] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>)
-).map(([cat, count]) => `${cat}: ${count}`).join(', ')}
-- Impacto médio: ${(projects.reduce((sum, p) => sum + p.impact, 0) / projects.length || 0).toFixed(1)}
-- Complexidade média: ${(projects.reduce((sum, p) => sum + p.complexity, 0) / projects.length || 0).toFixed(1)}
-
-Gerado em: ${new Date().toLocaleDateString('pt-BR')}
-    `;
+    const reportHTML = `<html><head>
+          <title>Relatório Estratégico - ${portfolioName}</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+              margin: 2rem; 
+              color: #1f2937; 
+              line-height: 1.6;
+              background: #fafafa;
+            }
+            .container {
+              max-width: 1200px;
+              margin: 0 auto;
+              background: white;
+              padding: 3rem;
+              border-radius: 16px;
+              box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            }
+            .header { 
+              display: flex; 
+              justify-content: space-between; 
+              align-items: center; 
+              border-bottom: 4px solid #22c55e; 
+              padding-bottom: 2rem; 
+              margin-bottom: 3rem; 
+            }
+            .logo { 
+              font-size: 2.5rem; 
+              font-weight: 700; 
+              background: linear-gradient(135deg, #0ea5e9 0%, #22c55e 100%); 
+              -webkit-background-clip: text; 
+              -webkit-text-fill-color: transparent; 
+            }
+            .overview {
+              background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+              padding: 2rem;
+              border-radius: 12px;
+              margin-bottom: 2rem;
+              border-left: 4px solid #0ea5e9;
+            }
+            .overview-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 1.5rem;
+              margin-top: 1rem;
+            }
+            .overview-card {
+              background: white;
+              padding: 1.5rem;
+              border-radius: 8px;
+              text-align: center;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .overview-value {
+              font-size: 2rem;
+              font-weight: bold;
+              color: #0ea5e9;
+              display: block;
+            }
+            .overview-label {
+              color: #6b7280;
+              font-size: 0.875rem;
+              margin-top: 0.5rem;
+            }
+            .chart-section {
+              margin: 3rem 0;
+              padding: 2rem;
+              background: #f8fafc;
+              border-radius: 12px;
+              border: 1px solid #e2e8f0;
+            }
+            .projects-table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-top: 2rem; 
+              background: white;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            }
+            .projects-table th, .projects-table td { 
+              border: 1px solid #e5e7eb; 
+              padding: 1rem; 
+              text-align: left; 
+            }
+            .projects-table th { 
+              background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); 
+              font-weight: 700; 
+              color: #374151;
+              text-transform: uppercase;
+              font-size: 0.875rem;
+              letter-spacing: 0.05em;
+            }
+            .category-core { background-color: #dbeafe; color: #1e40af; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-adjacente { background-color: #e9d5ff; color: #581c87; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .category-transformacional { background-color: #fce7f3; color: #831843; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; }
+            .legend {
+              display: flex;
+              gap: 2rem;
+              justify-content: center;
+              margin-top: 1rem;
+              flex-wrap: wrap;
+            }
+            .legend-item {
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              font-size: 0.875rem;
+              font-weight: 500;
+            }
+            .legend-dot {
+              width: 16px;
+              height: 16px;
+              border-radius: 50%;
+              border: 2px solid #fff;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            @media print { 
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .container { box-shadow: none; margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="logo">Cubo Estratégia</div>
+              <div>
+                <h1 style="margin: 0; color: #374151; font-size: 2rem;">${portfolioName}</h1>
+                <p style="margin: 0; color: #6b7280; font-size: 1.125rem;">Relatório gerado em: ${new Date().toLocaleDateString('pt-BR')}</p>
+              </div>
+            </div>
+            
+            <div class="overview">
+              <h2 style="margin: 0 0 1rem 0; color: #0ea5e9;">📊 Visão Geral do Portfólio Estratégico</h2>
+              <div class="overview-grid">
+                <div class="overview-card">
+                  <span class="overview-value">${projects.length}</span>
+                  <div class="overview-label">Projetos Selecionados</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${avgImpact}</span>
+                  <div class="overview-label">Impacto Médio</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${avgComplexity}</span>
+                  <div class="overview-label">Complexidade Média</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${highImpact}</span>
+                  <div class="overview-label">Alto Impacto (≥8)</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${lowComplexity}</span>
+                  <div class="overview-label">Baixa Complexidade (≤4)</div>
+                </div>
+                <div class="overview-card">
+                  <span class="overview-value">${withReturn}</span>
+                  <div class="overview-label">Com Retorno Definido</div>
+                </div>
+              </div>
+              
+              <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                <h3 style="margin: 0 0 1rem 0; color: #374151;">Distribuição por Categoria:</h3>
+                <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
+                  ${Object.entries(categoryCounts).map(([category, count]) => `
+                    <div style="text-align: center;">
+                      <div style="font-size: 1.5rem; font-weight: bold; color: #3b82f6;">${count}</div>
+                      <div style="font-size: 0.875rem; color: #6b7280;">${category}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+            
+            <div class="chart-section">
+              <h2 style="color: #374151; margin-bottom: 1.5rem; font-size: 1.5rem;">Matriz Estratégica: Impacto vs Complexidade</h2>
+              ${generateChartSVG()}
+              <div class="legend">
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #3b82f6;"></div>
+                  <span>Core</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #8b5cf6;"></div>
+                  <span>Adjacente</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background-color: #ec4899;"></div>
+                  <span>Transformacional</span>
+                </div>
+              </div>
+            </div>
+            
+            <h2 style="color: #374151; margin-bottom: 1.5rem; font-size: 1.5rem;">Projetos Estratégicos Selecionados</h2>
+            <table class="projects-table">
+              <thead>
+                <tr>
+                  <th>Projeto</th>
+                  <th>Categoria</th>
+                  <th>Impacto</th>
+                  <th>Complexidade</th>
+                  <th>Retorno Esperado</th>
+                  <th>Descrição</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${projects.map(project => {
+                  const colorInfo = getCategoryColors(project.category);
+                  return `
+                  <tr>
+                    <td style="font-weight: 600; color: #1f2937;">${project.name}</td>
+                    <td><span class="${colorInfo.class}">${project.category}</span></td>
+                    <td style="text-align: center; font-weight: 600; color: #059669;">${project.impact}</td>
+                    <td style="text-align: center; font-weight: 600; color: #dc2626;">${project.complexity}</td>
+                    <td style="font-weight: 600; color: #0ea5e9;">${project.expected_return || 'N/A'}</td>
+                    <td style="color: #6b7280;">${project.description || 'N/A'}</td>
+                  </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+            
+            <div style="margin-top: 3rem; padding-top: 2rem; border-top: 2px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 0.875rem;">
+              <strong>Relatório confidencial gerado pela Plataforma Cubo Estratégia</strong><br>
+              Este documento contém informações estratégicas sensíveis e deve ser tratado com confidencialidade.
+            </div>
+          </div>
+        </body></html>`;
 
     // Create a new window with the report content
     const reportWindow = window.open('', '_blank');
     if (reportWindow) {
-      reportWindow.document.write(`
-        <html>
-          <head>
-            <title>Relatório de Portfolio - ${portfolioName}</title>
-            <style>
-              body { font-family: monospace; white-space: pre-wrap; margin: 20px; line-height: 1.4; }
-              @media print { body { margin: 0; } }
-            </style>
-          </head>
-          <body>${reportContent}</body>
-        </html>
-      `);
+      reportWindow.document.write(reportHTML);
       reportWindow.document.close();
       
       // Auto-trigger print dialog
@@ -379,7 +615,7 @@ Gerado em: ${new Date().toLocaleDateString('pt-BR')}
             <TabsContent value="add" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Adicionar Projeto Manualmente</CardTitle>
+                  <CardTitle className="text-lg">Adicionar Projeto</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -438,16 +674,6 @@ Gerado em: ${new Date().toLocaleDateString('pt-BR')}
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Descrição (opcional)</label>
-                    <Textarea
-                      value={newProject.description}
-                      onChange={(e) => setNewProject({...newProject, description: e.target.value})}
-                      placeholder="Descrição do projeto"
-                      rows={2}
-                    />
                   </div>
 
                   <Button onClick={addProject} className="w-full">
