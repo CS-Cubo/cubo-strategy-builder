@@ -1,196 +1,99 @@
 
-import React from 'react';
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
   impact: number;
   complexity: number;
-  category: "Core" | "Adjacente" | "Transformacional";
-  selected: boolean;
+  category: string;
+  expected_return?: string;
 }
 
 interface PortfolioChartProps {
   projects: Project[];
 }
 
-const PortfolioChart = ({ projects }: PortfolioChartProps) => {
-  const categoryColors = {
-    Core: '#3b82f6',
-    Adjacente: '#8b5cf6', 
-    Transformacional: '#ec4899'
-  };
+const CATEGORY_COLORS = {
+  'Tecnologia': '#8B5CF6',
+  'Marketing': '#EF4444', 
+  'Operações': '#10B981',
+  'Vendas': '#F59E0B',
+  'RH': '#3B82F6',
+  'Outro': '#6B7280'
+};
 
-  const chartDots = projects.map(project => {
-    const cx = ((project.complexity - 1) / 9) * 80 + 10; // Adjusted for margin
-    const cy = 90 - (((project.impact - 1) / 9) * 80); // Adjusted for margin
-    
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
     return (
-      <g key={project.id} className="chart-group">
-        <circle 
-          cx={`${cx}%`} 
-          cy={`${cy}%`} 
-          r="8" 
-          fill={categoryColors[project.category]} 
-          className="hover:r-10 transition-all duration-200 cursor-pointer drop-shadow-md stroke-white stroke-2"
-        />
-        <title>{`${project.name}\nImpacto: ${project.impact}\nComplexidade: ${project.complexity}`}</title>
-      </g>
-    );
-  });
-
-  // Create grid lines
-  const gridLines = [];
-  for (let i = 1; i <= 9; i++) {
-    // Vertical lines (complexity)
-    gridLines.push(
-      <line 
-        key={`v-${i}`}
-        x1={`${10 + (i * 8)}%`} 
-        y1="10%" 
-        x2={`${10 + (i * 8)}%`} 
-        y2="90%" 
-        stroke="#e5e7eb" 
-        strokeWidth="1"
-        strokeDasharray="2,2"
-      />
-    );
-    // Horizontal lines (impact)
-    gridLines.push(
-      <line 
-        key={`h-${i}`}
-        x1="10%" 
-        y1={`${10 + (i * 8)}%`} 
-        x2="90%" 
-        y2={`${10 + (i * 8)}%`} 
-        stroke="#e5e7eb" 
-        strokeWidth="1"
-        strokeDasharray="2,2"
-      />
+      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+        <p className="font-semibold text-gray-900">{data.name}</p>
+        <p className="text-sm text-gray-600">Impacto: {data.impact}</p>
+        <p className="text-sm text-gray-600">Complexidade: {data.complexity}</p>
+        <p className="text-sm text-gray-600">Categoria: {data.category}</p>
+        {data.expected_return && (
+          <p className="text-sm text-gray-600">Retorno: {data.expected_return}</p>
+        )}
+      </div>
     );
   }
+  return null;
+};
 
-  // Axis tick marks and labels
-  const tickMarks = [];
-  for (let i = 1; i <= 10; i++) {
-    // X-axis ticks (complexity)
-    tickMarks.push(
-      <g key={`x-tick-${i}`}>
-        <line 
-          x1={`${2 + (i * 8)}%`} 
-          y1="90%" 
-          x2={`${2 + (i * 8)}%`} 
-          y2="92%" 
-          stroke="#6b7280" 
-          strokeWidth="1"
-        />
-        <text 
-          x={`${2 + (i * 8)}%`} 
-          y="96%" 
-          textAnchor="middle" 
-          fontSize="10" 
-          fill="#6b7280"
-        >
-          {i}
-        </text>
-      </g>
-    );
-    
-    // Y-axis ticks (impact)
-    tickMarks.push(
-      <g key={`y-tick-${i}`}>
-        <line 
-          x1="8%" 
-          y1={`${98 - (i * 8)}%`} 
-          x2="10%" 
-          y2={`${98 - (i * 8)}%`} 
-          stroke="#6b7280" 
-          strokeWidth="1"
-        />
-        <text 
-          x="6%" 
-          y={`${99 - (i * 8)}%`} 
-          textAnchor="middle" 
-          fontSize="10" 
-          fill="#6b7280" 
-          dominantBaseline="middle"
-        >
-          {i}
-        </text>
-      </g>
-    );
-  }
+const PortfolioChart = ({ projects }: PortfolioChartProps) => {
+  const chartData = projects.map(project => ({
+    ...project,
+    x: project.complexity,
+    y: project.impact,
+    fill: CATEGORY_COLORS[project.category as keyof typeof CATEGORY_COLORS] || CATEGORY_COLORS['Outro']
+  }));
 
   return (
-    <div className="w-full h-96 border rounded-lg p-6 relative bg-gradient-to-br from-slate-50 to-slate-100">
-      <svg width="100%" height="100%" viewBox="0 0 100 100" className="overflow-visible">
-        {/* Main axes */}
-        <line x1="10%" y1="90%" x2="90%" y2="90%" stroke="#374151" strokeWidth="2" />
-        <line x1="10%" y1="90%" x2="10%" y2="10%" stroke="#374151" strokeWidth="2" />
-        
-        {/* Grid lines */}
-        {gridLines}
-        
-        {/* Tick marks and numbers */}
-        {tickMarks}
-        
-        {/* Axis labels */}
-        <text 
-          x="50%" 
-          y="99%" 
-          textAnchor="middle" 
-          fontSize="12" 
-          fill="#374151" 
-          fontWeight="600"
+    <div className="w-full h-80 relative">
+      <ResponsiveContainer width="100%" height="100%">
+        <ScatterChart
+          data={chartData}
+          margin={{ top: 20, right: 30, bottom: 40, left: 40 }}
         >
-          Complexidade
-        </text>
-        
-        <text 
-          x="2%" 
-          y="50%" 
-          textAnchor="middle" 
-          fontSize="12" 
-          fill="#374151" 
-          fontWeight="600"
-          transform="rotate(-90 2 50)"
-        >
-          Impacto
-        </text>
-        
-        {/* Quadrant labels */}
-        <text x="75%" y="25%" fontSize="10" fill="#6b7280" fontWeight="500" textAnchor="middle">
-          Alto Impacto
-          <tspan x="75%" dy="12">Alta Complexidade</tspan>
-        </text>
-        <text x="25%" y="25%" fontSize="10" fill="#6b7280" fontWeight="500" textAnchor="middle">
-          Alto Impacto
-          <tspan x="25%" dy="12">Baixa Complexidade</tspan>
-        </text>
-        <text x="25%" y="80%" fontSize="10" fill="#6b7280" fontWeight="500" textAnchor="middle">
-          Baixo Impacto
-          <tspan x="25%" dy="12">Baixa Complexidade</tspan>
-        </text>
-        <text x="75%" y="80%" fontSize="10" fill="#6b7280" fontWeight="500" textAnchor="middle">
-          Baixo Impacto
-          <tspan x="75%" dy="12">Alta Complexidade</tspan>
-        </text>
-        
-        {/* Data points */}
-        {chartDots}
-      </svg>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis 
+            type="number"
+            dataKey="x"
+            domain={[0, 10]}
+            ticks={[0, 2, 4, 6, 8, 10]}
+            label={{ value: 'Complexidade', position: 'insideBottom', offset: -20, style: { fontSize: '12px' } }}
+            tick={{ fontSize: 11 }}
+          />
+          <YAxis 
+            type="number"
+            dataKey="y"
+            domain={[0, 10]}
+            ticks={[0, 2, 4, 6, 8, 10]}
+            label={{ value: 'Impacto', angle: -90, position: 'insideLeft', style: { fontSize: '12px' } }}
+            tick={{ fontSize: 11 }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Scatter dataKey="y" fill="#8884d8">
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.fill} />
+            ))}
+          </Scatter>
+        </ScatterChart>
+      </ResponsiveContainer>
       
-      {/* Legend */}
-      <div className="absolute -bottom-16 left-0 right-0 flex justify-center gap-6 text-sm">
-        {Object.entries(categoryColors).map(([category, color]) => (
-          <div key={category} className="flex items-center">
-            <div 
-              style={{ backgroundColor: color }} 
-              className="w-4 h-4 rounded-full mr-2 shadow-sm border-2 border-white"
-            />
-            <span className="text-gray-700 font-medium">{category}</span>
-          </div>
-        ))}
+      {/* Quadrant Labels */}
+      <div className="absolute top-6 left-12 text-xs text-gray-500 font-medium">
+        Alto Impacto<br />Baixa Complexidade
+      </div>
+      <div className="absolute top-6 right-12 text-xs text-gray-500 font-medium">
+        Alto Impacto<br />Alta Complexidade
+      </div>
+      <div className="absolute bottom-16 left-12 text-xs text-gray-500 font-medium">
+        Baixo Impacto<br />Baixa Complexidade
+      </div>
+      <div className="absolute bottom-16 right-12 text-xs text-gray-500 font-medium">
+        Baixo Impacto<br />Alta Complexidade
       </div>
     </div>
   );

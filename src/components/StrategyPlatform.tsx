@@ -1,503 +1,507 @@
-import React from 'react';
-import {
-  ResponsiveContainer,
-  ScatterChart,
-  Scatter,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from 'recharts';
+
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Download, Lightbulb, Plus } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useSession } from "@/hooks/useSession";
+import { supabase } from "@/integrations/supabase/client";
+import PortfolioChart from "@/components/PortfolioChart";
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
+  expected_return: string;
   impact: number;
   complexity: number;
-  category: "Core" | "Adjacente" | "Transformacional";
+  category: string;
+  description?: string;
   selected: boolean;
 }
 
-interface PortfolioChartProps {
-  projects: Project[];
+interface StrategySession {
+  id: string;
+  portfolio_name: string;
+  context_history: string;
+  context_initiatives: string;
 }
 
-const COLORS: Record<string, string> = {
-  Core: '#2563eb',
-  Adjacente: '#f59e0b',
-  Transformacional: '#10b981'
-};
+const StrategyPlatform = () => {
+  const { sessionId } = useSession();
+  const { toast } = useToast();
+  
+  const [portfolioName, setPortfolioName] = useState("");
+  const [contextHistory, setContextHistory] = useState("");
+  const [contextInitiatives, setContextInitiatives] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [strategySessionId, setStrategySessionId] = useState<string | null>(null);
+  
+  // New project form
+  const [newProject, setNewProject] = useState({
+    name: "",
+    expected_return: "",
+    impact: 5,
+    complexity: 5,
+    category: "",
+    description: ""
+  });
 
-const PortfolioChart: React.FC<PortfolioChartProps> = ({ projects }) => {
-  return (
-    <ResponsiveContainer width="100%" height={300}>
-      <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 40 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis
-          type="number"
-          dataKey="complexity"
-          name="Complexidade"
-          domain={[1, 10]}
-          tick={{ fontSize: 12 }}
-          label={{
-            value: 'Complexidade',
-            position: 'bottom',
-            offset: 0,
-            style: { fontSize: 12 }
-          }}
-        />
-        <YAxis
-          type="number"
-          dataKey="impact"
-          name="Impacto"
-          domain={[1, 10]}
-          tick={{ fontSize: 12 }}
-          label={{
-            value: 'Impacto',
-            angle: -90,
-            position: 'left',
-            offset: 0,
-            style: { fontSize: 12 }
-          }}
-        />
-        <Tooltip
-          cursor={{ strokeDasharray: '3 3' }}
-          contentStyle={{ fontSize: 12 }}
-          labelStyle={{ fontSize: 12 }}
-          itemStyle={{ fontSize: 12 }}
-        />
-        <Legend wrapperStyle={{ fontSize: 12 }} />
-        {['Core', 'Adjacente', 'Transformacional'].map(category => (
-          <Scatter
-            key={category}
-            name={category}
-            data={projects.filter(p => p.category === category)}
-            fill={COLORS[category]}
-          />
-        ))}
-      </ScatterChart>
-    </ResponsiveContainer>
-  );
-};
-
-export default PortfolioChart;
-
-  const handleProjectSelection = (id: string) => {
-    setSuggestedProjects(
-      suggestedProjects.map(project =>
-        project.id === id ? { ...project, selected: !project.selected } : project
-      )
-    );
-  };
-
-  const addManualProject = () => {
-    if (!newProject.name.trim()) {
-      toast({
-        title: "Nome obrigatório",
-        description: "Por favor, insira o nome do projeto.",
-        variant: "destructive"
-      });
-      return;
+  // Load existing strategy session
+  useEffect(() => {
+    if (sessionId) {
+      loadStrategySession();
     }
+  }, [sessionId]);
 
-    const project: Project = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: newProject.name,
-      impact: newProject.impact,
-      complexity: newProject.complexity,
-      category: newProject.category,
-      selected: true,
-      expectedReturn: newProject.expectedReturn,
-      description: ''
-    };
+  const loadStrategySession = async () => {
+    if (!sessionId) return;
 
-    setCurrentProjects([...currentProjects, project]);
-    setNewProject({
-      name: '',
-      expectedReturn: '',
-      impact: 1,
-      complexity: 1,
-      category: 'Core'
-    });
+    try {
+      const { data: strategySession, error: sessionError } = await supabase
+        .from('strategy_sessions')
+        .select('*')
+        .eq('session_id', sessionId)
+        .maybeSingle();
 
-    toast({
-      title: "Projeto adicionado!",
-      description: "O projeto foi adicionado ao seu portfólio.",
-    });
+      if (sessionError) throw sessionError;
+
+      if (strategySession) {
+        setStrategySessionId(strategySession.id);
+        setPortfolioName(strategySession.portfolio_name);
+        setContextHistory(strategySession.context_history || "");
+        setContextInitiatives(strategySession.context_initiatives || "");
+
+        // Load projects
+        const { data: projectsData, error: projectsError } = await supabase
+          .from('strategy_projects')
+          .select('*')
+          .eq('strategy_session_id', strategySession.id);
+
+        if (projectsError) throw projectsError;
+
+        if (projectsData) {
+          setProjects(projectsData.map(p => ({
+            id: p.id,
+            name: p.name,
+            expected_return: p.expected_return || "",
+            impact: p.impact,
+            complexity: p.complexity,
+            category: p.category,
+            description: p.description || "",
+            selected: p.selected
+          })));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading strategy session:', error);
+    }
   };
 
-  const saveConfiguration = async () => {
-    if (!sessionId) {
+  const savePortfolioConfig = async () => {
+    if (!sessionId || !portfolioName.trim()) {
       toast({
-        title: "Sessão inválida",
-        description: "Por favor, inicie uma sessão para salvar.",
+        title: "Erro",
+        description: "Nome do portfolio é obrigatório",
         variant: "destructive"
       });
       return;
     }
 
     try {
-      const { data: existingSession } = await supabase
-        .from('strategy_sessions')
-        .select('*')
-        .eq('session_id', sessionId)
-        .single();
-
-      if (existingSession) {
-        const { error: updateError } = await supabase
+      if (strategySessionId) {
+        // Update existing
+        const { error } = await supabase
           .from('strategy_sessions')
           .update({
             portfolio_name: portfolioName,
             context_history: contextHistory,
-            context_initiatives: contextInitiatives
+            context_initiatives: contextInitiatives,
+            updated_at: new Date().toISOString()
           })
-          .eq('id', existingSession.id);
+          .eq('id', strategySessionId);
 
-        if (updateError) throw updateError;
+        if (error) throw error;
       } else {
-        const { error: insertError } = await supabase
+        // Create new
+        const { data, error } = await supabase
           .from('strategy_sessions')
           .insert({
             session_id: sessionId,
             portfolio_name: portfolioName,
             context_history: contextHistory,
             context_initiatives: contextInitiatives
-          });
+          })
+          .select('id')
+          .single();
 
-        if (insertError) throw insertError;
+        if (error) throw error;
+        setStrategySessionId(data.id);
       }
 
       toast({
-        title: "Configuração salva!",
-        description: "As configurações do portfólio foram salvas.",
+        title: "Sucesso",
+        description: "Configuração do portfolio salva!"
       });
-
     } catch (error) {
-      console.error('Error saving configuration:', error);
+      console.error('Error saving portfolio config:', error);
       toast({
         title: "Erro",
-        description: "Erro ao salvar configurações.",
+        description: "Erro ao salvar configuração",
         variant: "destructive"
       });
     }
   };
 
-  const generateSuggestions = async () => {
-    if (!contextHistory.trim() || !contextInitiatives.trim()) {
+  const addProject = async () => {
+    if (!strategySessionId || !newProject.name.trim() || !newProject.category) {
       toast({
-        title: "Contexto necessário",
-        description: "Por favor, preencha o histórico e iniciativas.",
+        title: "Erro",
+        description: "Nome e categoria são obrigatórios",
         variant: "destructive"
       });
       return;
     }
 
-    setIsGenerating(true);
-    
     try {
-      await incrementProjectSuggestionsClicks();
+      const { data, error } = await supabase
+        .from('strategy_projects')
+        .insert({
+          strategy_session_id: strategySessionId,
+          name: newProject.name,
+          expected_return: newProject.expected_return,
+          impact: newProject.impact,
+          complexity: newProject.complexity,
+          category: newProject.category,
+          description: newProject.description
+        })
+        .select()
+        .single();
 
-      const contextDescription = `Histórico da empresa: ${contextHistory}\n\nIniciativas atuais: ${contextInitiatives}`;
-      
-      const { data, error } = await supabase.functions.invoke('ai-benchmarks', {
-        body: { 
-          description: contextDescription,
-          type: 'suggestions'
-        }
+      if (error) throw error;
+
+      setProjects([...projects, {
+        id: data.id,
+        name: data.name,
+        expected_return: data.expected_return || "",
+        impact: data.impact,
+        complexity: data.complexity,
+        category: data.category,
+        description: data.description || "",
+        selected: data.selected
+      }]);
+
+      // Reset form
+      setNewProject({
+        name: "",
+        expected_return: "",
+        impact: 5,
+        complexity: 5,
+        category: "",
+        description: ""
       });
 
-      if (error) {
-        console.error('Erro na função:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao gerar sugestões. Tente novamente.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      if (data?.projects) {
-        setSuggestedProjects(data.projects.map((project: any) => ({
-          ...project,
-          id: Math.random().toString(36).substr(2, 9),
-          selected: true
-        })));
-        
-        toast({
-          title: "Sugestões geradas!",
-          description: "Projetos estratégicos foram sugeridos.",
-        });
-      }
+      toast({
+        title: "Sucesso",
+        description: "Projeto adicionado!"
+      });
     } catch (error) {
-      console.error('Erro ao gerar sugestões:', error);
+      console.error('Error adding project:', error);
       toast({
         title: "Erro",
-        description: "Erro inesperado ao gerar sugestões.",
+        description: "Erro ao adicionar projeto",
         variant: "destructive"
       });
-    } finally {
-      setIsGenerating(false);
     }
   };
 
-  const saveSuggestedProjects = async () => {
-    const selectedProjects = suggestedProjects.filter(p => p.selected);
-    if (selectedProjects.length === 0) {
+  const removeProject = async (projectId: string) => {
+    try {
+      const { error } = await supabase
+        .from('strategy_projects')
+        .delete()
+        .eq('id', projectId);
+
+      if (error) throw error;
+
+      setProjects(projects.filter(p => p.id !== projectId));
       toast({
-        title: "Nenhum projeto selecionado",
-        description: "Selecione pelo menos um projeto.",
+        title: "Sucesso",
+        description: "Projeto removido!"
+      });
+    } catch (error) {
+      console.error('Error removing project:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao remover projeto",
         variant: "destructive"
       });
-      return;
     }
-
-    setCurrentProjects([...currentProjects, ...selectedProjects]);
-    setSuggestedProjects([]);
-    
-    toast({
-      title: "Projetos adicionados!",
-      description: "Os projetos selecionados foram adicionados ao portfólio.",
-    });
   };
 
   const generateReport = () => {
+    const reportContent = `
+RELATÓRIO DE PORTFOLIO ESTRATÉGICO
+
+Portfolio: ${portfolioName}
+
+CONTEXTO:
+Histórico: ${contextHistory}
+Iniciativas: ${contextInitiatives}
+
+PROJETOS (${projects.length}):
+${projects.map(p => `
+- ${p.name}
+  Categoria: ${p.category}
+  Impacto: ${p.impact}/10
+  Complexidade: ${p.complexity}/10
+  Retorno Esperado: ${p.expected_return}
+  ${p.description ? `Descrição: ${p.description}` : ''}
+`).join('')}
+
+ANÁLISE:
+- Total de projetos: ${projects.length}
+- Projetos por categoria: ${Object.entries(
+  projects.reduce((acc, p) => {
+    acc[p.category] = (acc[p.category] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>)
+).map(([cat, count]) => `${cat}: ${count}`).join(', ')}
+- Impacto médio: ${(projects.reduce((sum, p) => sum + p.impact, 0) / projects.length || 0).toFixed(1)}
+- Complexidade média: ${(projects.reduce((sum, p) => sum + p.complexity, 0) / projects.length || 0).toFixed(1)}
+
+Gerado em: ${new Date().toLocaleDateString('pt-BR')}
+    `;
+
+    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio-portfolio-${portfolioName.replace(/\s+/g, '-').toLowerCase()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
     toast({
-      title: "Relatório em desenvolvimento",
-      description: "Funcionalidade de relatório será implementada em breve.",
+      title: "Relatório gerado!",
+      description: "O arquivo foi baixado com sucesso."
     });
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full p-4">
-      {/* Left Column - Configuration */}
-      <div className="space-y-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Lightbulb className="w-4 h-4" />
-              Configuração do Portfólio
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="portfolioName" className="text-sm">Nome do Portfólio</Label>
-              <Input
-                id="portfolioName"
-                value={portfolioName}
-                onChange={(e) => setPortfolioName(e.target.value)}
-                placeholder="Ex: Estratégia Digital 2024"
-                className="text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="contextHistory" className="text-sm">Histórico e Contexto</Label>
-              <Textarea
-                id="contextHistory"
-                value={contextHistory}
-                onChange={(e) => setContextHistory(e.target.value)}
-                placeholder="Descreva o histórico relevante da empresa..."
-                rows={2}
-                className="text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="contextInitiatives" className="text-sm">Iniciativas e Pilares</Label>
-              <Textarea
-                id="contextInitiatives"
-                value={contextInitiatives}
-                onChange={(e) => setContextInitiatives(e.target.value)}
-                placeholder="Descreva as iniciativas estratégicas e pilares..."
-                rows={2}
-                className="text-sm"
-              />
-            </div>
-            <Button onClick={saveConfiguration} className="w-full text-sm" size="sm">
-              Salvar Configuração
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Portfolio Chart */}
-        {currentProjects.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Matriz de Portfólio</CardTitle>
-            </CardHeader>
-            <CardContent className="p-3">
-              <PortfolioChart projects={currentProjects.map(p => ({
-                id: parseInt(p.id, 36),
-                name: p.name,
-                impact: p.impact,
-                complexity: p.complexity,
-                category: p.category,
-                selected: p.selected
-              }))} />
-            </CardContent>
-          </Card>
-        )}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-gray-900">Plataforma de Estratégia</h1>
+        <Button onClick={generateReport} disabled={projects.length === 0}>
+          <Download className="w-4 h-4 mr-2" />
+          Gerar Relatório
+        </Button>
       </div>
 
-      {/* Right Column - Projects */}
-      <div className="space-y-4">
-        {/* AI Suggestions */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Sugerir Projetos com IA</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={generateSuggestions}
-              disabled={isGenerating || !contextHistory.trim() || !contextInitiatives.trim()}
-              className="w-full mb-3 text-sm"
-              size="sm"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                  Gerando Sugestões...
-                </>
-              ) : (
-                "Gerar Sugestões de Projetos"
-              )}
-            </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Portfolio Configuration */}
+        <div className="lg:col-span-1 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Configuração do Portfolio</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Nome do Portfolio</label>
+                <Input
+                  value={portfolioName}
+                  onChange={(e) => setPortfolioName(e.target.value)}
+                  placeholder="Digite o nome do portfolio"
+                />
+              </div>
 
-            {suggestedProjects.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-medium text-sm">Projetos Sugeridos:</h4>
-                {suggestedProjects.map((project) => (
-                  <div key={project.id} className="border rounded-md p-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">{project.name}</span>
-                      <Checkbox
-                        checked={project.selected}
-                        onCheckedChange={() => handleProjectSelection(project.id)}
+              <div>
+                <label className="block text-sm font-medium mb-2">Histórico e Contexto</label>
+                <Textarea
+                  value={contextHistory}
+                  onChange={(e) => setContextHistory(e.target.value)}
+                  placeholder="Descreva o histórico e contexto do portfolio"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Iniciativas e Pilares</label>
+                <Textarea
+                  value={contextInitiatives}
+                  onChange={(e) => setContextInitiatives(e.target.value)}
+                  placeholder="Descreva as iniciativas e pilares estratégicos"
+                  rows={3}
+                />
+              </div>
+
+              <Button onClick={savePortfolioConfig} className="w-full">
+                Salvar Configuração
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Projects and Chart */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex gap-4">
+            <Button variant="outline" className="flex-1">
+              <Lightbulb className="w-4 h-4 mr-2" />
+              Sugerir Projetos com IA
+            </Button>
+          </div>
+
+          <Tabs defaultValue="add" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="add">Adicionar Projeto</TabsTrigger>
+              <TabsTrigger value="current">Projetos Atuais</TabsTrigger>
+              <TabsTrigger value="chart">Gráfico</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="add" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Adicionar Projeto Manualmente</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Nome</label>
+                      <Input
+                        value={newProject.name}
+                        onChange={(e) => setNewProject({...newProject, name: e.target.value})}
+                        placeholder="Nome do projeto"
                       />
                     </div>
-                    <p className="text-xs text-gray-600">
-                      Impacto: {project.impact} | Complexidade: {project.complexity}
-                    </p>
-                    <p className="text-xs text-gray-700">{project.description}</p>
-                  </div>
-                ))}
-                <Button onClick={saveSuggestedProjects} className="w-full text-sm" size="sm">
-                  Adicionar Projetos Selecionados
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Manual Project Addition */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Plus className="w-4 h-4" />
-              Adicionar Projeto
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="projectName" className="text-sm">Nome</Label>
-              <Input
-                id="projectName"
-                value={newProject.name}
-                onChange={(e) => setNewProject({...newProject, name: e.target.value})}
-                placeholder="Nome do projeto"
-                className="text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="expectedReturn" className="text-sm">Retorno Esperado</Label>
-              <Input
-                id="expectedReturn"
-                value={newProject.expectedReturn}
-                onChange={(e) => setNewProject({...newProject, expectedReturn: e.target.value})}
-                placeholder="Ex: 25% ROI em 12 meses"
-                className="text-sm"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label htmlFor="impact" className="text-sm">Impacto (1-10)</Label>
-                <Input
-                  id="impact"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={newProject.impact}
-                  onChange={(e) => setNewProject({...newProject, impact: parseInt(e.target.value) || 1})}
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="complexity" className="text-sm">Complexidade (1-10)</Label>
-                <Input
-                  id="complexity"
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={newProject.complexity}
-                  onChange={(e) => setNewProject({...newProject, complexity: parseInt(e.target.value) || 1})}
-                  className="text-sm"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="category" className="text-sm">Categoria</Label>
-              <Select value={newProject.category} onValueChange={(value: "Core" | "Adjacente" | "Transformacional") => setNewProject({...newProject, category: value})}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Core">Core</SelectItem>
-                  <SelectItem value="Adjacente">Adjacente</SelectItem>
-                  <SelectItem value="Transformacional">Transformacional</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={addManualProject} className="w-full text-sm" size="sm">
-              Adicionar Manualmente
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Current Projects */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Projetos Atuais</CardTitle>
-            <CardDescription className="text-sm">
-              {currentProjects.length} projeto(s) no portfólio
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {currentProjects.length === 0 ? (
-              <p className="text-gray-500 text-center py-3 text-sm">
-                Nenhum projeto adicionado ainda
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {currentProjects.map((project) => (
-                  <div key={project.id} className="border rounded-md p-2">
-                    <div className="font-medium text-sm">{project.name}</div>
-                    <div className="text-xs text-gray-600">
-                      {project.category} | Impacto: {project.impact} | Complexidade: {project.complexity}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Retorno Esperado</label>
+                      <Input
+                        value={newProject.expected_return}
+                        onChange={(e) => setNewProject({...newProject, expected_return: e.target.value})}
+                        placeholder="Ex: 15% ao ano"
+                      />
                     </div>
-                    {project.expectedReturn && (
-                      <div className="text-xs text-gray-700">
-                        Retorno: {project.expectedReturn}
-                      </div>
-                    )}
                   </div>
-                ))}
-                <Button onClick={generateReport} className="w-full mt-3 text-sm" size="sm">
-                  <FileText className="mr-2 h-3 w-3" />
-                  Gerar Relatório
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Impacto (1-10)</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={newProject.impact}
+                        onChange={(e) => setNewProject({...newProject, impact: parseInt(e.target.value) || 5})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Complexidade (1-10)</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={newProject.complexity}
+                        onChange={(e) => setNewProject({...newProject, complexity: parseInt(e.target.value) || 5})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Categoria</label>
+                      <Select value={newProject.category} onValueChange={(value) => setNewProject({...newProject, category: value})}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Tecnologia">Tecnologia</SelectItem>
+                          <SelectItem value="Marketing">Marketing</SelectItem>
+                          <SelectItem value="Operações">Operações</SelectItem>
+                          <SelectItem value="Vendas">Vendas</SelectItem>
+                          <SelectItem value="RH">RH</SelectItem>
+                          <SelectItem value="Outro">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Descrição (opcional)</label>
+                    <Textarea
+                      value={newProject.description}
+                      onChange={(e) => setNewProject({...newProject, description: e.target.value})}
+                      placeholder="Descrição do projeto"
+                      rows={2}
+                    />
+                  </div>
+
+                  <Button onClick={addProject} className="w-full">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Adicionar Manualmente
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="current" className="space-y-4">
+              {projects.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <p className="text-gray-500">Nenhum projeto adicionado ainda</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {projects.map((project) => (
+                    <Card key={project.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <h4 className="font-medium">{project.name}</h4>
+                            <div className="flex gap-2 text-sm text-gray-600">
+                              <Badge variant="outline">{project.category}</Badge>
+                              <span>Impacto: {project.impact}</span>
+                              <span>Complexidade: {project.complexity}</span>
+                            </div>
+                            {project.expected_return && (
+                              <p className="text-sm text-gray-600">Retorno: {project.expected_return}</p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeProject(project.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="chart">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Matriz de Portfolio</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {projects.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">Adicione projetos para visualizar o gráfico</p>
+                    </div>
+                  ) : (
+                    <PortfolioChart projects={projects} />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );
