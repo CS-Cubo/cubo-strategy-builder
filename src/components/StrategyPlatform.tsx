@@ -277,19 +277,32 @@ ANÁLISE:
 Gerado em: ${new Date().toLocaleDateString('pt-BR')}
     `;
 
-    const blob = new Blob([reportContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relatorio-portfolio-${portfolioName.replace(/\s+/g, '-').toLowerCase()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Create a new window with the report content
+    const reportWindow = window.open('', '_blank');
+    if (reportWindow) {
+      reportWindow.document.write(`
+        <html>
+          <head>
+            <title>Relatório de Portfolio - ${portfolioName}</title>
+            <style>
+              body { font-family: monospace; white-space: pre-wrap; margin: 20px; line-height: 1.4; }
+              @media print { body { margin: 0; } }
+            </style>
+          </head>
+          <body>${reportContent}</body>
+        </html>
+      `);
+      reportWindow.document.close();
+      
+      // Auto-trigger print dialog
+      setTimeout(() => {
+        reportWindow.print();
+      }, 100);
+    }
 
     toast({
       title: "Relatório gerado!",
-      description: "O arquivo foi baixado com sucesso."
+      description: "Uma nova janela foi aberta com o relatório."
     });
   };
 
